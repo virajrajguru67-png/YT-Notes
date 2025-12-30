@@ -149,13 +149,13 @@ serve(async (req) => {
     }
 
     if (!transcript || transcript.length < 50) {
+      // Return 200 with a structured error so the client can handle it without treating it as a hard failure
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Transcript not available',
-          message: 'This video does not have captions available, or captions are disabled.'
+          message: 'This video does not have captions available, or captions are disabled.',
         }),
         {
-          status: 404,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
@@ -174,15 +174,17 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error in fetch-transcript:', error);
+
+    // Return 200 with structured error so the frontend can show a friendly message
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: 'Transcript not available',
-        message: error instanceof Error ? error.message : 'This video may not have captions enabled.'
+        message: error instanceof Error ? error.message : 'This video may not have captions enabled.',
       }),
       {
-        status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }
 });
+

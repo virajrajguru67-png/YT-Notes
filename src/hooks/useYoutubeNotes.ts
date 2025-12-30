@@ -54,10 +54,11 @@ export function useYoutubeNotes() {
 
     if (error) {
       console.error("Error fetching transcript:", error);
-      throw new Error("Failed to fetch transcript");
+      // Supabase can surface non-2xx as an error; prefer showing the actual message.
+      throw new Error(error.message || "Transcript not available");
     }
 
-    if (data.error) {
+    if (data?.error) {
       throw new Error(data.message || data.error);
     }
 
