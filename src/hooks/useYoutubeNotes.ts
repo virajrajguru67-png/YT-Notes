@@ -54,7 +54,6 @@ export function useYoutubeNotes() {
 
     if (error) {
       console.error("Error fetching transcript:", error);
-      // Supabase can surface non-2xx as an error; prefer showing the actual message.
       throw new Error(error.message || "Transcript not available");
     }
 
@@ -82,7 +81,10 @@ export function useYoutubeNotes() {
     return data.notes;
   };
 
-  const processVideo = async (url: string): Promise<{ video: VideoInfo; notes: string } | null> => {
+  const processVideo = async (
+    url: string,
+    manualTranscript?: string
+  ): Promise<{ video: VideoInfo; notes: string } | null> => {
     const videoId = extractVideoId(url);
 
     if (!videoId) {
@@ -105,9 +107,34 @@ export function useYoutubeNotes() {
       setVideoInfo(video);
       setIsLoadingVideo(false);
 
-      // Fetch transcript and generate notes
+      // Fetch transcript (auto or manual)
       setIsLoadingNotes(true);
-      const transcript = await fetchTranscript(videoId);
+      let transcript: string;
+
+      if (manualTranscript) {
+        // Use manually provided transcript
+        transcript = manualTranscript;
+        toast({
+          title: "Using manual transcript",
+          description: "Generating notes from your pasted transcript",
+        });
+      } else {
+        // Try to fetch transcript automatically
+        try {
+          transcript = await fetchTranscript(videoId);
+        } catch (transcriptError) {
+          // Show helpful error if auto-fetch fails
+          toast({
+            variant: "destructive",
+            title: "Transcript not available",
+            description:
+              "Auto-fetch failed. Click 'Paste transcript manually' to enter it yourself.",
+          });
+          setIsLoadingNotes(false);
+          return null;
+        }
+      }
+
       const generatedNotes = await generateNotes(transcript, video.title);
       setNotes(generatedNotes);
 

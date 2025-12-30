@@ -21,8 +21,8 @@ const Index = () => {
 
   const { history, addToHistory, clearHistory } = useNotesHistory();
 
-  const handleSubmit = async (url: string) => {
-    const result = await processVideo(url);
+  const handleSubmit = async (url: string, manualTranscript?: string) => {
+    const result = await processVideo(url, manualTranscript);
     if (result) {
       addToHistory({
         videoId: result.video.id,
