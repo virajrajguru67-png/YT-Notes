@@ -12,7 +12,12 @@ serve(async (req) => {
 
   try {
     const { transcript, videoTitle } = await req.json();
-    const GROQ_API_KEY = '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';
+    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+    
+    if (!GROQ_API_KEY) {
+      console.error('GROQ_API_KEY is not configured');
+      throw new Error('Groq API key is not configured');
+    }
 
     console.log('Generating notes for video:', videoTitle);
     console.log('Transcript length:', transcript.length);
