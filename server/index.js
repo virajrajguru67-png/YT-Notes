@@ -1231,26 +1231,7 @@ app.delete('/api/collections/:id', authenticateToken, async (req, res) => {
 // Export for Vercel
 if (require.main === module) {
     const PORT = process.env.PORT || 3001;
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        console.log('Environment checks:');
-        try {
-            console.log('Node version:', process.version);
-            const { execSync } = require('child_process');
-            try {
-                console.log('Python version:', execSync('python3 --version').toString().trim());
-            } catch {
-                console.log('Python3 not found, checking python...');
-                try {
-                    console.log('Python version:', execSync('python --version').toString().trim());
-                } catch {
-                    console.log('Python is NOT installed.');
-                }
-            }
-        } catch (e) {
-            console.error('Environment check failed:', e);
-        }
-    });
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 }
 
 module.exports = app;
