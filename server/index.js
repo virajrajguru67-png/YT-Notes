@@ -248,7 +248,7 @@ async function downloadAudio(videoId) {
                 const outputTemplate = path.join(tempDir, `${videoId}.%(ext)s`);
 
                 await ytDlp(videoUrl, {
-                    format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
+                    format: 'worstaudio[ext=m4a]/worstaudio[ext=webm]/worstaudio',
                     output: outputTemplate,
                     noCheckCertificates: true,
                     preferFreeFormats: true,
@@ -784,7 +784,7 @@ app.post('/api/process-video', authenticateToken, async (req, res) => {
         - Ensure language matches user preference (${prefs.ai_language}).`;
 
         const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Video: ${videoInfo.title}\n\nTranscript: ${transcript.substring(0, 25000)}` }
