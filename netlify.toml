@@ -13,6 +13,6 @@
 # replace the URL below with your actual Backend URL.
 [[redirects]]
   from = "/api/*"
-  to = "https://CHANGE_THIS_TO_YOUR_BACKEND_URL.onrender.com/api/:splat"
+  to = "https://yt-notes-uyy0.onrender.com/api/:splat"
   status = 200
   force = true
