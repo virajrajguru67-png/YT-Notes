@@ -18,6 +18,7 @@
         "jsonwebtoken": "^9.0.3",
         "multer": "^2.0.2",
         "mysql2": "^3.16.0",
+        "nodemailer": "^7.0.12",
         "youtube-transcript": "^1.2.1",
         "yt-dlp-exec": "^1.0.2",
         "ytdl-core": "^4.11.5"
