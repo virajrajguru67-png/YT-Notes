@@ -184,55 +184,49 @@ async function getLocalCookies() {
 }
 
 // Helper: Download Audio using yt-dlp (The "Nuclear Option" for reliability)
-// Helper: Download Audio using @distube/ytdl-core (Node.js compatible, no Python required)
 async function downloadAudio(videoId) {
-    const ytdl = require('@distube/ytdl-core');
-    const os = require('os');
-
-    return new Promise((resolve, reject) => {
+    const ytDlp = require('yt-dlp-exec');
+    return new Promise(async (resolve, reject) => {
         try {
             const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-            console.log(`Downloading audio via ytdl-core: ${videoUrl}`);
+            console.log(`Downloading audio via yt-dlp: ${videoUrl}`);
 
-            const tempFilePath = path.join(os.tmpdir(), `${videoId}_audio.m4a`);
+            // Output template: tempDir/videoId.extension
+            const outputTemplate = path.join(os.tmpdir(), `${videoId}.%(ext)s`);
 
-            // Delete existing
-            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-
-            // Get audio stream with Mobile User Agent (sometimes bypasses desktop login walls)
-            const stream = ytdl(videoUrl, {
-                quality: 'lowestaudio',
-                filter: 'audioonly',
-                requestOptions: {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-us',
-                        'Connection': 'keep-alive'
+            // Delete ANY existing files with this videoId prefix to avoid confusion
+            const tempDir = os.tmpdir();
+            fs
+                .readdirSync(tempDir)
+                .forEach(file => {
+                    if (file.startsWith(videoId)) {
+                        try { fs.unlinkSync(path.join(tempDir, file)); } catch (e) { }
                     }
-                }
+                });
+
+            // Download best audio explicitly (m4a or webm are supported by Groq)
+            // avoiding 'extractAudio' which requires ffmpeg
+            await ytDlp(videoUrl, {
+                format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
+                output: outputTemplate,
+                noCheckCertificates: true,
+                preferFreeFormats: true,
+                addHeader: [
+                    'referer:youtube.com',
+                    'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                ]
             });
 
-            const writeStream = fs.createWriteStream(tempFilePath);
-            stream.pipe(writeStream);
+            // Find the file that was just created
+            const downloadedFile = fs.readdirSync(tempDir).find(file => file.startsWith(videoId));
+            if (!downloadedFile) throw new Error('Download appeared to finish but no file was found.');
 
-            writeStream.on('finish', () => {
-                console.log(`Audio downloaded to: ${tempFilePath}`);
-                resolve(tempFilePath);
-            });
-
-            writeStream.on('error', (err) => {
-                console.error('File Write Error:', err);
-                reject(err);
-            });
-
-            stream.on('error', (err) => {
-                console.error('ytdl-core Stream Error:', err);
-                reject(err);
-            });
+            const finalPath = path.join(tempDir, downloadedFile);
+            console.log(`Audio downloaded to: ${finalPath}`);
+            resolve(finalPath);
 
         } catch (error) {
-            console.error('ytdl-core Error:', error);
+            console.error('yt-dlp Download Error:', error);
             reject(error);
         }
     });
