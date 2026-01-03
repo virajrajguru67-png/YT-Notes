@@ -41,7 +41,7 @@ const Index = () => {
 
     setIsLoadingRecs(true);
     try {
-      const res = await fetch('http://localhost:3001/api/recommendations', {
+      const res = await fetch('/api/recommendations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

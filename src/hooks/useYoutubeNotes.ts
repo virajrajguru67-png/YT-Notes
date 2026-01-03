@@ -11,7 +11,7 @@ interface VideoInfo {
   hasCaptions?: boolean;
 }
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 export function useYoutubeNotes() {
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);

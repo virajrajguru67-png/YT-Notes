@@ -59,7 +59,7 @@ export function AvatarUploadDialog({ open, onOpenChange, canEdit = true }: Avata
         formData.append("avatar", selectedFile);
 
         try {
-            const response = await axios.post("http://localhost:3001/api/upload-avatar", formData, {
+            const response = await axios.post("/api/upload-avatar", formData, {
                 headers: {
                     "Authorization": `Bearer ${token}`,
                     "Content-Type": "multipart/form-data",
@@ -82,7 +82,7 @@ export function AvatarUploadDialog({ open, onOpenChange, canEdit = true }: Avata
         if (!token) return;
         setIsDeleting(true);
         try {
-            await axios.delete("http://localhost:3001/api/delete-avatar", {
+            await axios.delete("/api/delete-avatar", {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             updateUser({ ...user!, avatar_url: undefined });
