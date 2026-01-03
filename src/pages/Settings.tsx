@@ -55,7 +55,7 @@ const Settings = () => {
         e.preventDefault();
         setIsUpdating(true);
         try {
-            const response = await axios.post("http://localhost:3001/api/update-user",
+            const response = await axios.post("http://127.0.0.1:3001/api/update-user",
                 {
                     username,
                     email,

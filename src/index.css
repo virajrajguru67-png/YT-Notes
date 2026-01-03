@@ -253,4 +253,29 @@
   .bg-gradient-green {
     @apply bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white shadow-lg shadow-emerald-500/20 border-0;
   }
+
+  /* New Animations for Loading State */
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes progress-indeterminate {
+    0% {
+      transform: translateX(-100%) scaleX(0.2);
+    }
+
+    50% {
+      transform: translateX(0%) scaleX(0.5);
+    }
+
+    100% {
+      transform: translateX(100%) scaleX(0.2);
+    }
+  }
+
+  .animate-progress-indeterminate {
+    animation: progress-indeterminate 1.5s infinite linear;
+  }
 }

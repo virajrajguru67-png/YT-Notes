@@ -20,6 +20,7 @@ import {
     ContextMenuItem,
     ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
     onHistorySelect?: (item: any) => void;
@@ -153,37 +154,46 @@ export function Sidebar({ className, onHistorySelect, refreshTrigger, onNewNote 
                                 history.map((item: any) => (
                                     <ContextMenu key={item.id}>
                                         <ContextMenuTrigger>
-                                            <Link
-                                                to="/"
-                                                state={{ selectedNote: item }}
-                                                onClick={(e) => {
-                                                    if (onHistorySelect) {
-                                                        e.preventDefault();
-                                                        onHistorySelect(item);
-                                                    }
-                                                    setOpen(false);
-                                                }}
-                                                className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-all duration-300 hover:bg-white dark:hover:bg-white/5 hover:shadow-xl hover:shadow-black/5 group border border-transparent hover:border-slate-100 dark:hover:border-white/10"
-                                            >
-                                                <div className="shrink-0 relative">
-                                                    <img
-                                                        src={item.thumbnail}
-                                                        alt={item.title}
-                                                        className="h-9 w-14 rounded-lg object-cover shadow-sm bg-slate-200 dark:bg-slate-800 transition-transform duration-500 group-hover:scale-105"
-                                                    />
-                                                    <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                                                        <Video className="w-3 h-3 text-white drop-shadow-md" />
-                                                    </div>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors leading-tight mb-0.5 break-words">
+                                            <TooltipProvider delayDuration={300}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Link
+                                                            to="/"
+                                                            state={{ selectedNote: item }}
+                                                            onClick={(e) => {
+                                                                if (onHistorySelect) {
+                                                                    e.preventDefault();
+                                                                    onHistorySelect(item);
+                                                                }
+                                                                setOpen(false);
+                                                            }}
+                                                            className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-all duration-300 hover:bg-white dark:hover:bg-white/5 hover:shadow-xl hover:shadow-black/5 group border border-transparent hover:border-slate-100 dark:hover:border-white/10"
+                                                        >
+                                                            <div className="shrink-0 relative">
+                                                                <img
+                                                                    src={item.thumbnail}
+                                                                    alt={item.title}
+                                                                    className="h-9 w-14 rounded-lg object-cover shadow-sm bg-slate-200 dark:bg-slate-800 transition-transform duration-500 group-hover:scale-105"
+                                                                />
+                                                                <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                                                    <Video className="w-3 h-3 text-white drop-shadow-md" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors leading-tight mb-0.5 truncate">
+                                                                    {item.title}
+                                                                </p>
+                                                                <p className="text-[9px] font-bold text-slate-400 group-hover:text-slate-500 transition-colors uppercase tracking-wider">
+                                                                    {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                                </p>
+                                                            </div>
+                                                        </Link>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="right" className="bg-slate-900 border-white/10 text-white font-medium text-xs max-w-[200px]">
                                                         {item.title}
-                                                    </p>
-                                                    <p className="text-[9px] font-bold text-slate-400 group-hover:text-slate-500 transition-colors uppercase tracking-wider">
-                                                        {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                                    </p>
-                                                </div>
-                                            </Link>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                         </ContextMenuTrigger>
                                         <ContextMenuContent className="w-48 rounded-xl p-1 bg-black/90 backdrop-blur-xl border-white/10 shadow-2xl">
                                             <ContextMenuItem className="flex items-center gap-2 text-xs font-medium p-2 rounded-lg cursor-pointer">

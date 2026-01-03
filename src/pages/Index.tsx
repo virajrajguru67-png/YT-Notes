@@ -9,6 +9,8 @@ import { NotesDisplay } from "@/components/NotesDisplay";
 import { useYoutubeNotes } from "@/hooks/useYoutubeNotes";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AntiGravityCanvas } from "@/components/ui/particle-effect-for-hero";
 
 interface Recommendation {
   query: string;
@@ -41,7 +43,7 @@ const Index = () => {
 
     setIsLoadingRecs(true);
     try {
-      const res = await fetch('http://localhost:3001/api/recommendations', {
+      const res = await fetch('http://127.0.0.1:3001/api/recommendations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,10 +113,13 @@ const Index = () => {
         <main className="lg:pl-[280px]">
           {(!videoInfo && !notes && !isLoadingVideo && !isLoadingNotes) ? (
             <div className="relative h-screen flex items-center justify-center overflow-hidden">
-              {/* Dynamic Background Blobs */}
-              <div className="absolute top-0 -left-4 w-72 h-72 bg-primary/30 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-              <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-              <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+              {/* Particle Canvas Background */}
+              <div className="absolute inset-0 z-0">
+                <AntiGravityCanvas />
+              </div>
+
+              {/* Gradient Overlay for Readability */}
+              <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/50 to-background/80 z-0 pointer-events-none" />
 
               <div className="container relative z-10 flex flex-col items-center justify-center">
                 {/* Hero Section */}
@@ -159,7 +164,7 @@ const Index = () => {
                 </section>
 
                 {/* Input Section - Sleek & Minimal */}
-                <section className="w-full max-w-2xl mx-auto px-4">
+                <section className="w-full max-w-2xl mx-auto px-4 z-20">
                   <UrlInput onSubmit={handleSubmit} isLoading={isLoadingVideo || isLoadingNotes} />
                 </section>
 
@@ -205,9 +210,16 @@ const Index = () => {
 
                     <div className="space-y-3 overflow-y-auto custom-scrollbar pr-2 h-[240px]">
                       {isLoadingRecs ? (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
-                          <Loader2 className="w-8 h-8 animate-spin mb-4 opacity-20" />
-                          <span className="text-xs font-bold uppercase tracking-widest opacity-40">Curating...</span>
+                        <div className="space-y-4 pt-1">
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} className="flex gap-4 p-2 rounded-2xl">
+                              <Skeleton className="w-28 aspect-video rounded-xl bg-slate-200 dark:bg-slate-800" />
+                              <div className="flex-1 py-1 space-y-2">
+                                <Skeleton className="h-4 w-3/4 rounded bg-slate-200 dark:bg-slate-800" />
+                                <Skeleton className="h-3 w-1/2 rounded bg-slate-200 dark:bg-slate-800" />
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : recommendations.length > 0 ? (
                         <div className="space-y-3">

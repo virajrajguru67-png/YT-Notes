@@ -31,7 +31,7 @@ export function useCollections() {
         if (!token) return;
         setIsLoading(true);
         try {
-            const response = await fetch('http://localhost:3001/api/collections', {
+            const response = await fetch('http://127.0.0.1:3001/api/collections', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (response.ok) {
@@ -48,7 +48,7 @@ export function useCollections() {
     const createCollection = async (name: string, description: string = "") => {
         if (!token) return;
         try {
-            const response = await fetch('http://localhost:3001/api/collections', {
+            const response = await fetch('http://127.0.0.1:3001/api/collections', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ export function useCollections() {
     const addToCollection = async (collectionId: number, noteId: number) => {
         if (!token) return;
         try {
-            const response = await fetch(`http://localhost:3001/api/collections/${collectionId}/add`, {
+            const response = await fetch(`http://127.0.0.1:3001/api/collections/${collectionId}/add`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ export function useCollections() {
     const deleteCollection = async (collectionId: number) => {
         if (!token) return;
         try {
-            const response = await fetch(`http://localhost:3001/api/collections/${collectionId}`, {
+            const response = await fetch(`http://127.0.0.1:3001/api/collections/${collectionId}`, {
                 method: 'DELETE',
                 headers: {
                     Authorization: `Bearer ${token}`

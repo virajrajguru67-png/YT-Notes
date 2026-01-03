@@ -15,7 +15,7 @@ export interface HistoryItem {
   user_id: number;
 }
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'http://127.0.0.1:3001/api';
 
 export function useNotesHistory() {
   const [history, setHistory] = useState<HistoryItem[]>([]);

@@ -20,7 +20,7 @@ export default function CollectionPage() {
         const fetchCollection = async () => {
             if (!token || !id) return;
             try {
-                const response = await fetch(`http://localhost:3001/api/collections/${id}`, {
+                const response = await fetch(`http://127.0.0.1:3001/api/collections/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (response.ok) {
@@ -43,7 +43,7 @@ export default function CollectionPage() {
         setIsSynthesizing(true);
         try {
             const noteIds = collection.items.map(item => item.note_id);
-            const response = await fetch('http://localhost:3001/api/synthesize-notes', {
+            const response = await fetch('http://127.0.0.1:3001/api/synthesize-notes', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

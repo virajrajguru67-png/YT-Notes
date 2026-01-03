@@ -46,7 +46,7 @@ export default function AuthPage() {
         e.preventDefault();
         setIsLoading(true);
         try {
-            const res = await fetch("http://localhost:3001/api/login", {
+            const res = await fetch("http://127.0.0.1:3001/api/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -70,7 +70,7 @@ export default function AuthPage() {
         e.preventDefault();
         setIsLoading(true);
         try {
-            const res = await fetch("http://localhost:3001/api/register", {
+            const res = await fetch("http://127.0.0.1:3001/api/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -96,7 +96,7 @@ export default function AuthPage() {
         e.preventDefault();
         setIsLoading(true);
         try {
-            const res = await fetch("http://localhost:3001/api/auth/forgot-password", {
+            const res = await fetch("http://127.0.0.1:3001/api/auth/forgot-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: forgotEmail }),
@@ -122,7 +122,7 @@ export default function AuthPage() {
         }
         setIsLoading(true);
         try {
-            const res = await fetch("http://localhost:3001/api/auth/reset-password", {
+            const res = await fetch("http://127.0.0.1:3001/api/auth/reset-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ token: resetToken, newPassword }),
@@ -145,7 +145,7 @@ export default function AuthPage() {
     const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
         setIsLoading(true);
         try {
-            const res = await fetch("http://localhost:3001/api/auth/google", {
+            const res = await fetch("http://127.0.0.1:3001/api/auth/google", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ token: credentialResponse.credential }),

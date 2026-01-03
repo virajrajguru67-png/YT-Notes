@@ -1,0 +1,15 @@
+{
+    "watch": [
+        "."
+    ],
+    "ext": "js,json",
+    "ignore": [
+        "uploads/**",
+        "cookies.json",
+        "**/*-player-script.js",
+        "*.log",
+        "temp/**",
+        "node_modules/**"
+    ],
+    "verbose": true
+}

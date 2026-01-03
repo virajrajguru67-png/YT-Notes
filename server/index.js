@@ -240,6 +240,11 @@ async function downloadAudio(videoId) {
     } catch (ytdlError) {
         console.warn(`[Audio] ytdl-core failed (${ytdlError.message}). Switching to yt-dlp...`);
 
+        // Clean up potential 0-byte files from ytdl-core
+        try {
+            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        } catch (e) { }
+
         // STRATEGY 2: yt-dlp (External process, reliable but heavier)
         return new Promise(async (resolve, reject) => {
             try {
@@ -248,10 +253,11 @@ async function downloadAudio(videoId) {
                 const outputTemplate = path.join(tempDir, `${videoId}.%(ext)s`);
 
                 await ytDlp(videoUrl, {
-                    format: 'worstaudio[ext=m4a]/worstaudio[ext=webm]/worstaudio',
+                    format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
                     output: outputTemplate,
                     noCheckCertificates: true,
                     preferFreeFormats: true,
+                    keepVideo: true, // Sometimes needed to prevent deletion of merged files? No, default is fine.
 
                     addHeader: [
                         'referer:youtube.com',
@@ -259,11 +265,24 @@ async function downloadAudio(videoId) {
                     ]
                 });
 
-                const downloadedFile = fs.readdirSync(tempDir).find(file => file.startsWith(videoId) && (file.endsWith('.m4a') || file.endsWith('.webm') || file.endsWith('.mp3')));
-                if (!downloadedFile) throw new Error('Download appeared to finish but no file was found.');
+                // Find the downloaded file (checking strongly for size > 0)
+                const downloadedFile = fs.readdirSync(tempDir).find(file => {
+                    if (!file.startsWith(videoId)) return false;
+                    const validExt = file.endsWith('.m4a') || file.endsWith('.webm') || file.endsWith('.mp3');
+                    if (!validExt) return false;
+
+                    try {
+                        const stats = fs.statSync(path.join(tempDir, file));
+                        return stats.size > 0;
+                    } catch (e) {
+                        return false;
+                    }
+                });
+
+                if (!downloadedFile) throw new Error('Download appeared to finish but no valid (non-empty) file was found.');
 
                 const finalPath = path.join(tempDir, downloadedFile);
-                console.log(`[Audio] yt-dlp download complete: ${finalPath}`);
+                console.log(`[Audio] yt-dlp download complete: ${finalPath}, Size: ${fs.statSync(finalPath).size}`);
                 resolve(finalPath);
 
             } catch (error) {
@@ -661,7 +680,7 @@ app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), async
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        const avatarUrl = `http://localhost:3001/uploads/avatars/${req.file.filename}`;
+        const avatarUrl = `http://127.0.0.1:3001/uploads/avatars/${req.file.filename}`;
         const userId = req.user.id;
 
         await pool.execute('UPDATE users SET avatar_url = ? WHERE id = ?', [avatarUrl, userId]);
@@ -770,21 +789,16 @@ app.post('/api/process-video', authenticateToken, async (req, res) => {
         const systemPrompt = `You are an expert educational assistant with a ${prefs.ai_tone} personality. 
         Your goal is to create ${prefs.ai_detail_level} study notes from the provided video transcript. 
         Ensure the notes are written in ${prefs.ai_language === 'hi' ? 'Hindi (Devanagari)' : 'English'}.
-        
-        CRITICAL INSTRUCTIONS FOR LENGTH AND DEPTH:
-        - Generate EXTREMELY DETAILED, LONG-FORM notes. Do not summarize briefly.
-        - Aim for comprehensive coverage (1500+ words if content allows).
-        - Break down every complex concept with examples.
-        - Use clear Markdown with H1, H2, H3 headings, bullet points, and bold text.
-        - If the transcript is long, capture ALL key information, not just the highlights.
+        Do NOT summarize too briefly if the user requested detailed notes; preserve all key explanations, examples, and nuances. 
+        Use clear Markdown structure with headings, bullet points, and bold text for emphasis.
         
         SPECIAL INSTRUCTIONS FOR SONGS/LYRICS:
         - If the video is a song, provide the lyrics in their ORIGINAL script and a line-by-line translation.
-        - Correct any errors in auto-captions before processing.
+        - करेक्ट (Correct) any errors in auto-captions before processing.
         - Ensure language matches user preference (${prefs.ai_language}).`;
 
         const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.1-8b-instant',
+            model: 'llama-3.3-70b-versatile',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Video: ${videoInfo.title}\n\nTranscript: ${transcript.substring(0, 25000)}` }

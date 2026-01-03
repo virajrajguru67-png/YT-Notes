@@ -64,7 +64,7 @@ export default function Library() {
 
     const fetchHistory = async () => {
         try {
-            const res = await fetch("http://localhost:3001/api/history", {
+            const res = await fetch("http://127.0.0.1:3001/api/history", {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             const data = await res.json();
@@ -90,7 +90,7 @@ export default function Library() {
 
         setIsSynthesizing(true);
         try {
-            const res = await fetch("http://localhost:3001/api/synthesize-notes", {
+            const res = await fetch("http://127.0.0.1:3001/api/synthesize-notes", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -430,7 +430,7 @@ export default function Library() {
                                                                 e.stopPropagation();
                                                                 if (confirm("Delete this note?")) {
                                                                     try {
-                                                                        await fetch(`http://localhost:3001/api/history/${note.id}`, {
+                                                                        await fetch(`http://127.0.0.1:3001/api/history/${note.id}`, {
                                                                             method: 'DELETE',
                                                                             headers: { "Authorization": `Bearer ${token}` }
                                                                         });

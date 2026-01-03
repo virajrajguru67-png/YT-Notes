@@ -160,69 +160,60 @@ export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentSte
     }, []);
 
     if (isLoading) {
-        // Map currentStep to a progress state
-        const steps = [
-            { id: 1, label: "Acquiring Video", keywords: ["Searching", "Retrieving", "Download"] },
-            { id: 2, label: "Transcribing Audio", keywords: ["Transcribing", "Extracting"] },
-            { id: 3, label: "AI Analysis", keywords: ["Structuring", "Analyzing", "Crafting"] },
-            { id: 4, label: "Finalizing", keywords: ["Finalizing", "Saving"] }
-        ];
-
-        const activeStepIndex = steps.findIndex(s => s.keywords.some(k => currentStep?.includes(k))) || 0;
-        const progress = ((activeStepIndex + 1) / steps.length) * 100;
-
         return (
-            <div className="glass-card flex flex-col items-center justify-center rounded-3xl p-8 lg:p-12 min-h-[500px] border-none shadow-2xl relative overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl">
-                {/* Ambient Background */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-purple-500 to-emerald-500 animate-gradient-x"></div>
-                <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-5"></div>
+            <div className="glass-card flex flex-col items-center justify-center rounded-[40px] p-12 min-h-[600px] border-none shadow-2xl relative overflow-hidden group">
+                {/* Ambient Background Glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] animate-pulse -z-10" />
 
-                <div className="w-full max-w-md space-y-8 relative z-10">
-                    {/* Main Pulse Animation */}
-                    <div className="relative mx-auto w-32 h-32 flex items-center justify-center">
-                        <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-75 duration-[3s]"></div>
-                        <div className="absolute inset-2 bg-primary/10 rounded-full animate-pulse duration-[2s]"></div>
-                        <div className="relative bg-white dark:bg-slate-800 rounded-full p-6 shadow-2xl ring-1 ring-slate-900/5 dark:ring-white/10">
-                            <Sparkles className="w-12 h-12 text-primary animate-pulse" />
+                <div className="relative mb-16 perspective-1000">
+                    {/* The 3D Card Icon */}
+                    <div className="w-32 h-44 bg-gradient-to-br from-white/40 to-white/10 dark:from-white/10 dark:to-transparent backdrop-blur-xl border border-white/40 dark:border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] transform -rotate-y-12 rotate-z-3 animate-float flex flex-col items-center justify-center relative overflow-hidden">
+
+                        {/* Card Content Lines */}
+                        <div className="w-16 h-2 bg-white/40 rounded-full mb-3" />
+                        <div className="w-20 h-2 bg-white/20 rounded-full mb-2" />
+                        <div className="w-20 h-2 bg-white/20 rounded-full mb-2" />
+                        <div className="w-12 h-2 bg-white/20 rounded-full" />
+
+                        {/* Central Glowing Icon */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Sparkles className="w-14 h-14 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-pulse" />
                         </div>
+
+                        {/* Shimmer Effect */}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
                     </div>
 
-                    {/* Text Status */}
-                    <div className="text-center space-y-2">
-                        <h3 className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">
-                            {currentStep || "Initializing AI..."}
+                    {/* Orbiting Elements */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-primary/30 rounded-full animate-[spin_8s_linear_infinite]" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-60 h-60 border border-dashed border-primary/20 rounded-full animate-[spin_12s_linear_infinite_reverse]" />
+
+                    {/* Small orbiting dots */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full animate-[spin_4s_linear_infinite]">
+                        <div className="w-3 h-3 bg-primary rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)] absolute top-0 left-1/2 -translate-x-1/2 -mt-1.5" />
+                    </div>
+                </div>
+
+                <div className="text-center space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700 max-w-md relative z-10">
+                    <div>
+                        <h3 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-slate-800 to-slate-500 dark:from-white dark:to-slate-400 tracking-tighter mb-2">
+                            {currentStep || "Generating Magic"}
                         </h3>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                            Generating Genius Notes
+                        <p className="text-slate-500 dark:text-slate-400 font-medium">
+                            Distilling video content into genius notes...
                         </p>
                     </div>
 
-                    {/* Step Cards */}
-                    <div className="space-y-3">
-                        {steps.map((step, idx) => {
-                            const isActive = idx === activeStepIndex;
-                            const isCompleted = idx < activeStepIndex;
-                            return (
-                                <div
-                                    key={step.id}
-                                    className={`flex items-center gap-4 p-3 rounded-xl border transition-all duration-500 ${isActive
-                                            ? 'bg-primary/5 border-primary/20 scale-105 shadow-lg'
-                                            : isCompleted
-                                                ? 'bg-slate-50/50 dark:bg-white/5 border-transparent opacity-60'
-                                                : 'border-transparent opacity-30'
-                                        }`}
-                                >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${isActive ? 'bg-primary text-white' : isCompleted ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                                        }`}>
-                                        {isCompleted ? "✓" : step.id}
-                                    </div>
-                                    <span className={`text-sm font-bold ${isActive ? 'text-primary' : 'text-slate-600 dark:text-slate-300'}`}>
-                                        {step.label}
-                                    </span>
-                                    {isActive && <Loader2 className="w-4 h-4 text-primary animate-spin ml-auto" />}
-                                </div>
-                            );
-                        })}
+                    {/* Progress Bar */}
+                    <div className="flex flex-col items-center gap-4 w-64 mx-auto">
+                        <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-[1px]">
+                            <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full animate-progress-indeterminate origin-left shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                        </div>
+                        <div className="flex gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.2s]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.4s]" />
+                        </div>
                     </div>
                 </div>
             </div>
