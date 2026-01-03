@@ -46,7 +46,7 @@ export function InteractiveStudy({ notes, videoTitle, videoId }: InteractiveStud
     const generateFlashcards = async () => {
         setIsFlashcardLoading(true);
         try {
-            const res = await fetch("http://localhost:3001/api/generate-flashcards", {
+            const res = await fetch("/api/generate-flashcards", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -66,7 +66,7 @@ export function InteractiveStudy({ notes, videoTitle, videoId }: InteractiveStud
     const generateQuiz = async () => {
         setIsQuizLoading(true);
         try {
-            const res = await fetch("http://localhost:3001/api/generate-quiz", {
+            const res = await fetch("/api/generate-quiz", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -105,7 +105,7 @@ export function InteractiveStudy({ notes, videoTitle, videoId }: InteractiveStud
             toast.error("Not quite!");
             // Report mistake to backend for adaptive learning
             try {
-                await fetch("http://localhost:3001/api/report-mistake", {
+                await fetch("/api/report-mistake", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
