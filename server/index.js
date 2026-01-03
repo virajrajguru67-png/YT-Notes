@@ -50,6 +50,10 @@ const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 3306,
+    ssl: {
+        rejectUnauthorized: false
+    },
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -1161,5 +1165,10 @@ app.delete('/api/collections/:id', authenticateToken, async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Export for Vercel
+if (require.main === module) {
+    const PORT = process.env.PORT || 3001;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+module.exports = app;
