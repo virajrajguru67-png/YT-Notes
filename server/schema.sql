@@ -1,0 +1,11 @@
+CREATE DATABASE IF NOT EXISTS youtube_notes;
+USE youtube_notes;
+
+CREATE TABLE IF NOT EXISTS notes_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    video_id VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    thumbnail TEXT,
+    notes LONGTEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

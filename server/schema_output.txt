@@ -1,0 +1,8 @@
+- id (int(11))
+- video_id (varchar(50))
+- title (varchar(255))
+- thumbnail (text)
+- notes (longtext)
+- created_at (timestamp)
+- user_id (int(11))
+- category (varchar(50))
