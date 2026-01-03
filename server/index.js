@@ -68,12 +68,7 @@ const dbConfig = {
     queueLimit: 0
 };
 
-// Only enable SSL for non-local connections (e.g. Aiven)
-if (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
-    dbConfig.ssl = {
-        rejectUnauthorized: false
-    };
-}
+
 
 const pool = mysql.createPool(dbConfig);
 
