@@ -10,8 +10,20 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const app = express();
 const multer = require('multer');
 const nodemailer = require('nodemailer');
+app.enable('trust proxy');
 app.use(cors());
 app.use(express.json());
+
+// Debug Middleware
+app.use((req, res, next) => {
+    console.log(`[Request] ${req.method} ${req.url}`);
+    next();
+});
+
+// Test/Status Route
+app.get('/api/test', (req, res) => res.json({ status: 'ok', message: 'Server is running' }));
+app.get('/api/auth/google', (req, res) => res.status(405).json({ error: 'Method Not Allowed. Use POST.' }));
+
 app.use((req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
     next();
