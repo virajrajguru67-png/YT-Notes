@@ -170,20 +170,24 @@ const authenticateAdmin = (req, res, next) => {
 };
 
 // Helper: Get Cookies from file (Manual Method)
+// Helper: Get Cookies from file (Manual Method)
 async function getLocalCookies() {
     try {
         const cookiePath = path.join(__dirname, 'cookies.json');
         if (fs.existsSync(cookiePath)) {
             console.log('Found manual cookies.json file.');
-            const cookies = JSON.parse(fs.readFileSync(cookiePath, 'utf-8'));
+            const fileContent = fs.readFileSync(cookiePath, 'utf-8').trim();
+            if (!fileContent) return "";
+
+            const cookies = JSON.parse(fileContent);
             // Innertube cookie format is just a string "key=value; key=value;"
             if (Array.isArray(cookies)) {
                 return cookies.map(c => `${c.name}=${c.value}`).join('; ');
             }
-            return ""; // Assume it's not the array format we expect or handle other formats if needed
+            return "";
         }
     } catch (e) {
-        console.warn('Error reading cookies.json:', e);
+        console.warn('Error reading cookies.json (ignoring):', e.message);
     }
     return "";
 }
@@ -253,6 +257,7 @@ async function downloadAudio(videoId) {
                     output: outputTemplate,
                     noCheckCertificates: true,
                     preferFreeFormats: true,
+                    geoBypassCountry: 'IN',
                     addHeader: [
                         'referer:youtube.com',
                         'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
