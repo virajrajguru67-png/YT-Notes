@@ -183,47 +183,47 @@ async function getLocalCookies() {
 }
 
 // Helper: Download Audio using yt-dlp (The "Nuclear Option" for reliability)
+// Helper: Download Audio using @distube/ytdl-core (Node.js compatible, no Python required)
 async function downloadAudio(videoId) {
-    const ytDlp = require('yt-dlp-exec');
-    return new Promise(async (resolve, reject) => {
+    const ytdl = require('@distube/ytdl-core');
+    const os = require('os');
+
+    return new Promise((resolve, reject) => {
         try {
             const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-            console.log(`Downloading audio via yt-dlp: ${videoUrl}`);
+            console.log(`Downloading audio via ytdl-core: ${videoUrl}`);
 
-            // Output template: tempDir/videoId.extension
-            const outputTemplate = path.join(os.tmpdir(), `${videoId}.%(ext)s`);
+            const tempFilePath = path.join(os.tmpdir(), `${videoId}_audio.m4a`);
 
-            // Delete ANY existing files with this videoId prefix to avoid confusion
-            const tempDir = os.tmpdir();
-            fs.readdirSync(tempDir).forEach(file => {
-                if (file.startsWith(videoId)) {
-                    try { fs.unlinkSync(path.join(tempDir, file)); } catch (e) { }
-                }
+            // Delete existing
+            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+
+            // Get audio stream
+            const stream = ytdl(videoUrl, {
+                quality: 'lowestaudio',
+                filter: 'audioonly'
             });
 
-            // Download best audio explicitly (m4a or webm are supported by Groq)
-            // avoiding 'extractAudio' which requires ffmpeg
-            await ytDlp(videoUrl, {
-                format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
-                output: outputTemplate,
-                noCheckCertificates: true,
-                preferFreeFormats: true,
-                addHeader: [
-                    'referer:youtube.com',
-                    'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                ]
+            const writeStream = fs.createWriteStream(tempFilePath);
+            stream.pipe(writeStream);
+
+            writeStream.on('finish', () => {
+                console.log(`Audio downloaded to: ${tempFilePath}`);
+                resolve(tempFilePath);
             });
 
-            // Find the file that was just created
-            const downloadedFile = fs.readdirSync(tempDir).find(file => file.startsWith(videoId));
-            if (!downloadedFile) throw new Error('Download appeared to finish but no file was found.');
+            writeStream.on('error', (err) => {
+                console.error('File Write Error:', err);
+                reject(err);
+            });
 
-            const finalPath = path.join(tempDir, downloadedFile);
-            console.log(`Audio downloaded to: ${finalPath}`);
-            resolve(finalPath);
+            stream.on('error', (err) => {
+                console.error('ytdl-core Stream Error:', err);
+                reject(err);
+            });
 
         } catch (error) {
-            console.error('yt-dlp Download Error:', error);
+            console.error('ytdl-core Error:', error);
             reject(error);
         }
     });
