@@ -7,7 +7,6 @@ const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-process.env.YTDL_NO_CACHE = 'true';
 const app = express();
 const multer = require('multer');
 const nodemailer = require('nodemailer');
@@ -58,21 +57,28 @@ const upload = multer({
     }
 });
 
-const pool = mysql.createPool({
+const dbConfig = {
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT || 3306,
-    ssl: {
-        rejectUnauthorized: false
-    },
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
-});
+};
+
+// Only enable SSL for non-local connections (e.g. Aiven)
+if (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
+    dbConfig.ssl = {
+        rejectUnauthorized: false
+    };
+}
+
+const pool = mysql.createPool(dbConfig);
 
 const { YoutubeTranscript } = require('youtube-transcript');
+const ytdl = require('@distube/ytdl-core');
 const os = require('os');
 const FormData = require('form-data');
 const bcrypt = require('bcryptjs');
@@ -195,13 +201,11 @@ async function downloadAudio(videoId) {
 
             // Delete ANY existing files with this videoId prefix to avoid confusion
             const tempDir = os.tmpdir();
-            fs
-                .readdirSync(tempDir)
-                .forEach(file => {
-                    if (file.startsWith(videoId)) {
-                        try { fs.unlinkSync(path.join(tempDir, file)); } catch (e) { }
-                    }
-                });
+            fs.readdirSync(tempDir).forEach(file => {
+                if (file.startsWith(videoId)) {
+                    try { fs.unlinkSync(path.join(tempDir, file)); } catch (e) { }
+                }
+            });
 
             // Download best audio explicitly (m4a or webm are supported by Groq)
             // avoiding 'extractAudio' which requires ffmpeg
