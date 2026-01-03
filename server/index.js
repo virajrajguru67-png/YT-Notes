@@ -73,7 +73,6 @@ const pool = mysql.createPool({
 });
 
 const { YoutubeTranscript } = require('youtube-transcript');
-const ytdl = require('@distube/ytdl-core');
 const os = require('os');
 const FormData = require('form-data');
 const bcrypt = require('bcryptjs');
