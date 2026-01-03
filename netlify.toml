@@ -3,16 +3,15 @@
   publish = "dist"
 
 # Handle Single Page Application (SPA) routing
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-
-# Proxy API requests to the Backend
-# IMPORTANT: After deploying your 'server' folder to Render/Railway, 
-# replace the URL below with your actual Backend URL.
+# Proxy API requests to the Backend (MUST COME FIRST)
 [[redirects]]
   from = "/api/*"
   to = "https://yt-notes-uyy0.onrender.com/api/:splat"
   status = 200
   force = true
+
+# Handle Single Page Application (SPA) routing (Fallback)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
