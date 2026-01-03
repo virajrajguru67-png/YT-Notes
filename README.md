@@ -29,3 +29,4 @@ Transform YouTube videos into comprehensive study notes with AI.
 - **Midnight Aurora Theme**: A premium, dark-mode-first aesthetic with glassmorphism.
 - **History Tracking**: Keep track of all your processed videos.
 - **Export Options**: Copy to clipboard, download as TXT, or Print/PDF.
+# YT-Notes 
