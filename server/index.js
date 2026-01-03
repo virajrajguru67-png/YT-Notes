@@ -204,23 +204,19 @@ async function downloadAudio(videoId) {
     // STRATEGY 1: Try @distube/ytdl-core (Pure JS, lighter)
     try {
         console.log(`[Audio] Trying ytdl-core for: ${videoId}`);
-        const cookies = await getLocalCookies(); // returns string of cookies if any
+        const cookies = await getLocalCookies();
 
-        let agentOptions = undefined;
-        // Simple cookie parsing if needed, but ytdl-core handles some naturally
-        // ignoring complex agent setup for now to keep it simple, relying on distube's updates
-
-        const stream = ytdl(videoUrl, {
-            quality: 'lowestaudio', // or 'highestaudio' - we just need speech
-            filter: 'audioonly',
-            requestOptions: {
-                headers: {
-                    Cookie: cookies
+        await new Promise((resolve, reject) => {
+            const stream = ytdl(videoUrl, {
+                quality: 'lowestaudio', // or 'highestaudio' - we just need speech
+                filter: 'audioonly',
+                requestOptions: {
+                    headers: {
+                        Cookie: cookies
+                    }
                 }
-            }
-        });
+            });
 
-        return new Promise((resolve, reject) => {
             const writer = fs.createWriteStream(outputPath);
             stream.pipe(writer);
 
@@ -240,6 +236,8 @@ async function downloadAudio(videoId) {
             });
         });
 
+        return outputPath;
+
     } catch (ytdlError) {
         console.warn(`[Audio] ytdl-core failed (${ytdlError.message}). Switching to yt-dlp...`);
 
@@ -248,8 +246,6 @@ async function downloadAudio(videoId) {
             try {
                 console.log(`[Audio] Downloading via yt-dlp: ${videoUrl}`);
 
-                // Output template: tempDir/videoId.%(ext)s
-                // We force m4a to match our expectation or let it decide and find it later
                 const outputTemplate = path.join(tempDir, `${videoId}.%(ext)s`);
 
                 await ytDlp(videoUrl, {
@@ -257,14 +253,12 @@ async function downloadAudio(videoId) {
                     output: outputTemplate,
                     noCheckCertificates: true,
                     preferFreeFormats: true,
-                    // cookies: 'cookies.json', // Only if file exists on server
                     addHeader: [
                         'referer:youtube.com',
                         'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                     ]
                 });
 
-                // Find the file (it might use webm or m4a extension)
                 const downloadedFile = fs.readdirSync(tempDir).find(file => file.startsWith(videoId) && (file.endsWith('.m4a') || file.endsWith('.webm') || file.endsWith('.mp3')));
                 if (!downloadedFile) throw new Error('Download appeared to finish but no file was found.');
 
