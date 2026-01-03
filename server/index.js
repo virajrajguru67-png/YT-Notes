@@ -363,7 +363,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             [token, expires, userId]
         );
 
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
         const resetLink = `${frontendUrl}/auth?token=${token}`;
 
         // Send the real email
