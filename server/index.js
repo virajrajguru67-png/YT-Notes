@@ -7,6 +7,7 @@ const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+process.env.YTDL_NO_CACHE = 'true';
 const app = express();
 const multer = require('multer');
 const nodemailer = require('nodemailer');
