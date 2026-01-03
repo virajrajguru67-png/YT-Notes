@@ -198,10 +198,18 @@ async function downloadAudio(videoId) {
             // Delete existing
             if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
 
-            // Get audio stream
+            // Get audio stream with Mobile User Agent (sometimes bypasses desktop login walls)
             const stream = ytdl(videoUrl, {
                 quality: 'lowestaudio',
-                filter: 'audioonly'
+                filter: 'audioonly',
+                requestOptions: {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-us',
+                        'Connection': 'keep-alive'
+                    }
+                }
             });
 
             const writeStream = fs.createWriteStream(tempFilePath);
