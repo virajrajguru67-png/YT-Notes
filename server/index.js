@@ -851,7 +851,7 @@ app.post('/api/recommendations', async (req, res) => {
             messages: [
                 {
                     role: 'system',
-                    content: 'You are an intelligent content recommender. Your goal is to suggest 10 relevant, high-quality YouTube search queries or video topics based on the provided video notes. \nFirst, determine the PRIMARY CATEGORY of the content (e.g., Education, Music, Sports, Gaming, Entertainment).\n- If Education/Tech: Suggest advanced study topics, specific technical deep-dives, or related concepts.\n- If Music: Suggest similar artists, genre history, live performances, or music theory.\n- If Sports: Suggest match analysis, player highlights, historical moments, or training guides.\n- If Gaming: Suggest lore videos, pro-level analysis, speedruns, or similar games.\n- If Entertainment/Vlog: Suggest similar creators, related trends, or behind-the-scenes content.\n\nOutput Requirement: Return ONLY a valid JSON array of 10 distinct strings. No other text.'
+                    content: 'You are an intelligent content recommender. Your goal is to suggest 10 relevant, high-quality YouTube search queries or video topics based on the provided video notes. \nFirst, determine the PRIMARY CATEGORY of the content (e.g., Education, Music, Sports, Gaming, Entertainment).\n- If Education/Tech: Suggest advanced study topics, specific technical deep-dives, or related concepts.\n- If Music: Suggest similar artists, genre history, live performances, or music theory.\n- If Sports: Suggest match analysis, player highlights, historical moments, or training guides.\n- If Gaming: Suggest lore videos, pro-level analysis, speedruns, or similar games.\n- If Entertainment/Vlog: Suggest similar creators, related trends, or behind-the-scenes content.\n\nOutput Requirement: Return ONLY a flat JSON array of 10 distinct strings. Example: ["topic 1", "topic 2"]. Do not return objects.'
                 },
                 {
                     role: 'user',
@@ -863,8 +863,12 @@ app.post('/api/recommendations', async (req, res) => {
         });
 
         let content = groqRes.data.choices[0].message.content;
-        // Clean markdown code blocks if present
-        content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+        // Robust JSON extraction
+        const jsonStart = content.indexOf('[');
+        const jsonEnd = content.lastIndexOf(']');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+            content = content.substring(jsonStart, jsonEnd + 1);
+        }
 
         let recommendations;
         try {
@@ -873,8 +877,14 @@ app.post('/api/recommendations', async (req, res) => {
                 recommendations = Object.values(recommendations).find(Array.isArray) || [videoTitle];
             }
         } catch (e) {
-            console.warn("Failed to parse JSON recommendations, using raw split", content);
-            recommendations = content.split('\n').filter(l => l.length > 5).map(l => l.replace(/^[-\d.]+\s*/, ''));
+            console.warn("Failed to parse JSON recommendations, using Regex fallback", content);
+            // Fallback: extract phrases in quotes
+            const matches = content.match(/"([^"]+)"/g);
+            if (matches) {
+                recommendations = matches.map(s => s.replace(/"/g, ''));
+            } else {
+                recommendations = [videoTitle];
+            }
         }
 
         // Ensure we only process at most 10 items
