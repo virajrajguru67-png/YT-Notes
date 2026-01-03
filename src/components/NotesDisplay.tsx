@@ -160,31 +160,69 @@ export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentSte
     }, []);
 
     if (isLoading) {
+        // Map currentStep to a progress state
+        const steps = [
+            { id: 1, label: "Acquiring Video", keywords: ["Searching", "Retrieving", "Download"] },
+            { id: 2, label: "Transcribing Audio", keywords: ["Transcribing", "Extracting"] },
+            { id: 3, label: "AI Analysis", keywords: ["Structuring", "Analyzing", "Crafting"] },
+            { id: 4, label: "Finalizing", keywords: ["Finalizing", "Saving"] }
+        ];
+
+        const activeStepIndex = steps.findIndex(s => s.keywords.some(k => currentStep?.includes(k))) || 0;
+        const progress = ((activeStepIndex + 1) / steps.length) * 100;
+
         return (
-            <div className="glass-card flex flex-col items-center justify-center rounded-3xl p-12 min-h-[500px] border-none shadow-2xl relative overflow-hidden group">
-                {/* Decorative Background Elements */}
+            <div className="glass-card flex flex-col items-center justify-center rounded-3xl p-8 lg:p-12 min-h-[500px] border-none shadow-2xl relative overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl">
+                {/* Ambient Background */}
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-purple-500 to-emerald-500 animate-gradient-x"></div>
+                <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-5"></div>
 
-                <div className="relative mb-10">
-                    <div className="absolute inset-0 animate-ping rounded-full bg-primary/10 scale-150"></div>
-                    <div className="absolute inset-0 animate-pulse rounded-full bg-primary/5 scale-125"></div>
-                    <div className="relative h-28 w-28 flex items-center justify-center bg-white dark:bg-slate-900 rounded-full shadow-2xl ring-1 ring-white/20">
-                        <Loader2 className="absolute h-24 w-24 animate-spin text-primary/10 stroke-[1]" />
-                        <Sparkles className="h-12 w-12 text-primary animate-float" />
+                <div className="w-full max-w-md space-y-8 relative z-10">
+                    {/* Main Pulse Animation */}
+                    <div className="relative mx-auto w-32 h-32 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-75 duration-[3s]"></div>
+                        <div className="absolute inset-2 bg-primary/10 rounded-full animate-pulse duration-[2s]"></div>
+                        <div className="relative bg-white dark:bg-slate-800 rounded-full p-6 shadow-2xl ring-1 ring-slate-900/5 dark:ring-white/10">
+                            <Sparkles className="w-12 h-12 text-primary animate-pulse" />
+                        </div>
                     </div>
-                </div>
 
-                <div className="text-center space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 max-w-md">
-                    <h3 className="text-2xl font-extrabold text-foreground tracking-tight">
-                        {currentStep || "Crafting Your Genius Notes"}
-                    </h3>
-                    <p className="text-muted-foreground font-medium leading-relaxed">
-                        Our AI is distilling complex explanations into structured knowledge for you.
-                    </p>
-                    <div className="flex gap-2 justify-center">
-                        <span className="w-2 h-2 rounded-full bg-primary animate-bounce"></span>
-                        <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0.2s]"></span>
-                        <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0.4s]"></span>
+                    {/* Text Status */}
+                    <div className="text-center space-y-2">
+                        <h3 className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">
+                            {currentStep || "Initializing AI..."}
+                        </h3>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                            Generating Genius Notes
+                        </p>
+                    </div>
+
+                    {/* Step Cards */}
+                    <div className="space-y-3">
+                        {steps.map((step, idx) => {
+                            const isActive = idx === activeStepIndex;
+                            const isCompleted = idx < activeStepIndex;
+                            return (
+                                <div
+                                    key={step.id}
+                                    className={`flex items-center gap-4 p-3 rounded-xl border transition-all duration-500 ${isActive
+                                            ? 'bg-primary/5 border-primary/20 scale-105 shadow-lg'
+                                            : isCompleted
+                                                ? 'bg-slate-50/50 dark:bg-white/5 border-transparent opacity-60'
+                                                : 'border-transparent opacity-30'
+                                        }`}
+                                >
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${isActive ? 'bg-primary text-white' : isCompleted ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                                        }`}>
+                                        {isCompleted ? "✓" : step.id}
+                                    </div>
+                                    <span className={`text-sm font-bold ${isActive ? 'text-primary' : 'text-slate-600 dark:text-slate-300'}`}>
+                                        {step.label}
+                                    </span>
+                                    {isActive && <Loader2 className="w-4 h-4 text-primary animate-spin ml-auto" />}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>

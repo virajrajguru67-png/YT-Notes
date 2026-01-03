@@ -770,12 +770,17 @@ app.post('/api/process-video', authenticateToken, async (req, res) => {
         const systemPrompt = `You are an expert educational assistant with a ${prefs.ai_tone} personality. 
         Your goal is to create ${prefs.ai_detail_level} study notes from the provided video transcript. 
         Ensure the notes are written in ${prefs.ai_language === 'hi' ? 'Hindi (Devanagari)' : 'English'}.
-        Do NOT summarize too briefly if the user requested detailed notes; preserve all key explanations, examples, and nuances. 
-        Use clear Markdown structure with headings, bullet points, and bold text for emphasis.
+        
+        CRITICAL INSTRUCTIONS FOR LENGTH AND DEPTH:
+        - Generate EXTREMELY DETAILED, LONG-FORM notes. Do not summarize briefly.
+        - Aim for comprehensive coverage (1500+ words if content allows).
+        - Break down every complex concept with examples.
+        - Use clear Markdown with H1, H2, H3 headings, bullet points, and bold text.
+        - If the transcript is long, capture ALL key information, not just the highlights.
         
         SPECIAL INSTRUCTIONS FOR SONGS/LYRICS:
         - If the video is a song, provide the lyrics in their ORIGINAL script and a line-by-line translation.
-        - करेक्ट (Correct) any errors in auto-captions before processing.
+        - Correct any errors in auto-captions before processing.
         - Ensure language matches user preference (${prefs.ai_language}).`;
 
         const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
