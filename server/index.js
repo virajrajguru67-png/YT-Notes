@@ -189,50 +189,95 @@ async function getLocalCookies() {
 }
 
 // Helper: Download Audio using yt-dlp (The "Nuclear Option" for reliability)
+// Helper: Download Audio using @distube/ytdl-core (Primary) and yt-dlp (Fallback)
 async function downloadAudio(videoId) {
     const ytDlp = require('yt-dlp-exec');
-    return new Promise(async (resolve, reject) => {
-        try {
-            const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-            console.log(`Downloading audio via yt-dlp: ${videoUrl}`);
+    const tempDir = os.tmpdir();
+    const outputPath = path.join(tempDir, `${videoId}.m4a`); // Prefer m4a for Whisper
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-            // Output template: tempDir/videoId.extension
-            const outputTemplate = path.join(os.tmpdir(), `${videoId}.%(ext)s`);
+    // Clean up existing files
+    try {
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    } catch (e) { }
 
-            // Delete ANY existing files with this videoId prefix to avoid confusion
-            const tempDir = os.tmpdir();
-            fs.readdirSync(tempDir).forEach(file => {
-                if (file.startsWith(videoId)) {
-                    try { fs.unlinkSync(path.join(tempDir, file)); } catch (e) { }
+    // STRATEGY 1: Try @distube/ytdl-core (Pure JS, lighter)
+    try {
+        console.log(`[Audio] Trying ytdl-core for: ${videoId}`);
+        const cookies = await getLocalCookies(); // returns string of cookies if any
+
+        let agentOptions = undefined;
+        // Simple cookie parsing if needed, but ytdl-core handles some naturally
+        // ignoring complex agent setup for now to keep it simple, relying on distube's updates
+
+        const stream = ytdl(videoUrl, {
+            quality: 'lowestaudio', // or 'highestaudio' - we just need speech
+            filter: 'audioonly',
+            requestOptions: {
+                headers: {
+                    Cookie: cookies
                 }
+            }
+        });
+
+        return new Promise((resolve, reject) => {
+            const writer = fs.createWriteStream(outputPath);
+            stream.pipe(writer);
+
+            stream.on('error', (err) => {
+                console.warn(`[Audio] ytdl-core stream error: ${err.message}`);
+                writer.close();
+                reject(err);
             });
 
-            // Download best audio explicitly (m4a or webm are supported by Groq)
-            // avoiding 'extractAudio' which requires ffmpeg
-            await ytDlp(videoUrl, {
-                format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
-                output: outputTemplate,
-                noCheckCertificates: true,
-                preferFreeFormats: true,
-                addHeader: [
-                    'referer:youtube.com',
-                    'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                ]
+            writer.on('finish', () => {
+                console.log(`[Audio] ytdl-core download complete: ${outputPath}`);
+                resolve(outputPath);
             });
+            writer.on('error', (err) => {
+                console.error(`[Audio] File write error: ${err.message}`);
+                reject(err);
+            });
+        });
 
-            // Find the file that was just created
-            const downloadedFile = fs.readdirSync(tempDir).find(file => file.startsWith(videoId));
-            if (!downloadedFile) throw new Error('Download appeared to finish but no file was found.');
+    } catch (ytdlError) {
+        console.warn(`[Audio] ytdl-core failed (${ytdlError.message}). Switching to yt-dlp...`);
 
-            const finalPath = path.join(tempDir, downloadedFile);
-            console.log(`Audio downloaded to: ${finalPath}`);
-            resolve(finalPath);
+        // STRATEGY 2: yt-dlp (External process, reliable but heavier)
+        return new Promise(async (resolve, reject) => {
+            try {
+                console.log(`[Audio] Downloading via yt-dlp: ${videoUrl}`);
 
-        } catch (error) {
-            console.error('yt-dlp Download Error:', error);
-            reject(error);
-        }
-    });
+                // Output template: tempDir/videoId.%(ext)s
+                // We force m4a to match our expectation or let it decide and find it later
+                const outputTemplate = path.join(tempDir, `${videoId}.%(ext)s`);
+
+                await ytDlp(videoUrl, {
+                    format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
+                    output: outputTemplate,
+                    noCheckCertificates: true,
+                    preferFreeFormats: true,
+                    // cookies: 'cookies.json', // Only if file exists on server
+                    addHeader: [
+                        'referer:youtube.com',
+                        'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    ]
+                });
+
+                // Find the file (it might use webm or m4a extension)
+                const downloadedFile = fs.readdirSync(tempDir).find(file => file.startsWith(videoId) && (file.endsWith('.m4a') || file.endsWith('.webm') || file.endsWith('.mp3')));
+                if (!downloadedFile) throw new Error('Download appeared to finish but no file was found.');
+
+                const finalPath = path.join(tempDir, downloadedFile);
+                console.log(`[Audio] yt-dlp download complete: ${finalPath}`);
+                resolve(finalPath);
+
+            } catch (error) {
+                console.error('[Audio] yt-dlp Download Error:', error);
+                reject(error);
+            }
+        });
+    }
 }
 
 // Helper: Transcribe Audio with Groq Whisper
