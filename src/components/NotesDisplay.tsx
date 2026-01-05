@@ -14,9 +14,10 @@ interface NotesDisplayProps {
     videoTitle?: string;
     videoId?: string;
     currentStep?: string;
+    onNextVideo?: () => void;
 }
 
-export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentStep }: NotesDisplayProps) {
+export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentStep, onNextVideo }: NotesDisplayProps) {
     const { toast } = useToast();
     const [currentPage, setCurrentPage] = useState(1);
     const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'study'>('notes');
@@ -278,6 +279,17 @@ export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentSte
                     >
                         <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
                     </Button>
+
+                    {onNextVideo && (
+                        <Button
+                            variant="ghost"
+                            onClick={onNextVideo}
+                            className="hidden sm:inline-flex h-8 w-auto px-4 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs uppercase tracking-wide gap-2 transition-all"
+                        >
+                            <span>Next</span>
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    )}
                 </div>
             </div>
 

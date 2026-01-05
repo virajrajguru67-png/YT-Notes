@@ -1,149 +1,134 @@
-import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { Sidebar } from "@/components/Sidebar";
+import { useParams, Link } from "react-router-dom";
+import { useCollections } from "@/hooks/useCollections";
+import { FolderOpen, BookOpen, Clock, PlayCircle, MoreVertical, Trash2, ArrowLeft, RefreshCw, Sparkles, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Play, FileText, Sparkles, BrainCircuit, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { Collection } from "@/hooks/useCollections";
-import { InteractiveStudy } from "@/components/InteractiveStudy";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useState } from "react";
 
 export default function CollectionPage() {
     const { id } = useParams();
-    const { token } = useAuth();
-    const [collection, setCollection] = useState<Collection | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const { collections, isLoading, fetchCollections } = useCollections();
     const [isSynthesizing, setIsSynthesizing] = useState(false);
-    const [studyMode, setStudyMode] = useState(false);
 
-    useEffect(() => {
-        const fetchCollection = async () => {
-            if (!token || !id) return;
-            try {
-                const response = await fetch(`http://127.0.0.1:3001/api/collections/${id}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const data: Collection = await response.json();
-                    setCollection(data);
-                } else {
-                    toast.error("Failed to load course");
-                }
-            } catch (error) {
-                console.error("Error fetching collection:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchCollection();
-    }, [id, token]);
+    const collection = collections.find(c => c.id === Number(id));
 
     const handleSynthesize = async () => {
-        if (!collection || !collection.items.length) return;
+        if (!collection?.items?.length) return;
         setIsSynthesizing(true);
         try {
-            const noteIds = collection.items.map(item => item.note_id);
-            const response = await fetch('http://127.0.0.1:3001/api/synthesize-notes', {
+            const noteIds = collection.items.map((n: any) => n.id);
+            const res = await fetch('http://127.0.0.1:3001/api/synthesize-notes', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({ noteIds })
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                navigator.clipboard.writeText(data.synthesis);
-                toast.success("Master Guide Generated! Copied to clipboard.");
-            } else {
-                toast.error("Failed to synthesize guide");
+            const data = await res.json();
+            if (data.masterGuide) {
+                toast.success("Master Guide Generated!");
+                // You would navigate to a display page or show it here
             }
-        } catch (error) {
-            toast.error("Error synthesizing");
+        } catch (e) {
+            toast.error("Synthesis failed");
         } finally {
             setIsSynthesizing(false);
         }
     };
 
-    if (isLoading) return <div className="min-h-screen bg-background flex items-center justify-center">Loading...</div>;
-    if (!collection) return <div className="min-h-screen bg-background flex items-center justify-center">Course not found</div>;
-
-    const combinedNotes = collection.items.map(item => item.notes || "").join("\n\n");
-
     return (
-        <div className="flex min-h-screen bg-background">
+        <div className="min-h-screen bg-background font-sans selection:bg-primary/20 relative">
             <Sidebar />
 
-            <main className="flex-1 lg:pl-[280px] p-8 overflow-y-auto">
-                <div className="max-w-5xl mx-auto space-y-8">
-                    {studyMode ? (
-                        <div className="space-y-6">
-                            <Button variant="ghost" className="gap-2" onClick={() => setStudyMode(false)}>
-                                <ArrowLeft className="w-4 h-4" /> Back to Course Overview
-                            </Button>
-                            <InteractiveStudy
-                                notes={combinedNotes}
-                                videoTitle={collection.name}
-                            />
-                        </div>
-                    ) : (
-                        <>
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3 text-primary mb-2">
-                                    <BookOpen className="w-6 h-6" />
-                                    <span className="text-sm font-bold uppercase tracking-widest">Knowledge Course</span>
-                                </div>
-                                <h1 className="text-4xl font-black tracking-tight lg:text-5xl">{collection.name}</h1>
-                                <p className="text-xl text-muted-foreground">{collection.items.length} Modules • Created {new Date(collection.created_at).toLocaleDateString()}</p>
+            <main className="lg:pl-[280px] min-h-screen flex flex-col">
+                <header className="px-6 pb-6 pt-20 md:p-10 border-b border-slate-100 dark:border-white/5 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl shrink-0">
+                    <div className="max-w-7xl mx-auto space-y-8">
+                        <Link to="/library" className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-primary transition-colors mb-4">
+                            <ArrowLeft className="w-3.5 h-3.5" />
+                            Library
+                        </Link>
+
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div>
+                                <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white tracking-tight flex flex-col md:flex-row md:items-center gap-4">
+                                    {isLoading ? <Skeleton className="h-10 w-64" /> : (collection?.name || "Collection")}
+                                </h1>
+                                <p className="text-slate-500 dark:text-slate-400 font-medium mt-2">
+                                    A curated sequence of learning modules organized by you.
+                                </p>
                             </div>
 
-                            <div className="flex flex-wrap gap-4 p-6 rounded-2xl bg-secondary/30 border border-border">
+                            <div className="flex gap-4">
                                 <Button
-                                    size="lg"
-                                    className="font-bold gap-2 text-md h-12 rounded-xl"
                                     onClick={handleSynthesize}
-                                    disabled={isSynthesizing || collection.items.length < 2}
+                                    disabled={isSynthesizing || !collection?.items?.length}
+                                    className="h-12 px-8 rounded-2xl bg-gradient-to-r from-primary to-emerald-500 text-white font-black text-xs uppercase tracking-widest gap-2.5 shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
                                 >
-                                    {isSynthesizing ? (
-                                        <Sparkles className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                        <BrainCircuit className="w-5 h-5" />
-                                    )}
-                                    {isSynthesizing ? "Synthesizing..." : "Generate Master Guide (AI)"}
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="lg"
-                                    className="font-bold gap-2 text-md h-12 rounded-xl"
-                                    onClick={() => setStudyMode(true)}
-                                    disabled={collection.items.length === 0}
-                                >
-                                    <Play className="w-5 h-5" />
-                                    Start Course Quiz
+                                    {isSynthesizing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                    Synthesize Master Guide
                                 </Button>
                             </div>
+                        </div>
+                    </div>
+                </header>
 
-                            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                                {collection.items.map((item, index) => (
-                                    <div key={item.id} className="group relative aspect-video rounded-xl overflow-hidden bg-muted border border-border cursor-pointer hover:ring-2 ring-primary transition-all">
-                                        <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
-                                        <div className="absolute inset-0 p-4 flex flex-col justify-between">
-                                            <div className="flex justify-between items-start">
-                                                <span className="bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded">Module {index + 1}</span>
+                <div className="flex-1 p-6 md:p-10 bg-slate-50/50 dark:bg-black/20">
+                    <div className="max-w-7xl mx-auto">
+                        {isLoading ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {[1, 2, 3].map(n => <Skeleton key={n} className="h-48 rounded-[32px]" />)}
+                            </div>
+                        ) : !collection?.items?.length ? (
+                            <div className="p-20 text-center glass-card rounded-[40px] border-dashed border-slate-200 dark:border-white/10">
+                                <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <BookOpen className="w-10 h-10 text-slate-300" />
+                                </div>
+                                <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight mb-2">No videos in this course</h4>
+                                <p className="text-slate-500 font-medium">Add notes from your library or dashboard to begin.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+                                {collection.items.map((notesItem: any, idx: number) => (
+                                    <div
+                                        key={notesItem.id}
+                                        className="group glass-card rounded-[32px] overflow-hidden hover:bg-white dark:hover:bg-slate-900/60 transition-all duration-500 shadow-xl shadow-black/5 hover:shadow-2xl hover:shadow-primary/5 active:scale-[0.98] cursor-pointer"
+                                        onClick={() => {
+                                            window.location.href = `/?id=${notesItem.id}`;
+                                        }}
+                                    >
+                                        <div className="aspect-video relative overflow-hidden">
+                                            <div className="absolute top-4 left-4 z-20 w-8 h-8 rounded-xl bg-primary/90 text-white flex items-center justify-center font-black text-xs shadow-lg">
+                                                {idx + 1}
                                             </div>
-                                            <h3 className="font-bold text-white text-lg leading-tight line-clamp-2 drop-shadow-lg group-hover:scale-105 transition-transform origin-bottom-left">
-                                                {item.title}
-                                            </h3>
+                                            <img
+                                                src={notesItem.thumbnail}
+                                                alt={notesItem.title}
+                                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                            />
+                                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all duration-500" />
+                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <PlayCircle className="w-12 h-12 text-white fill-white shadow-xl" />
+                                            </div>
                                         </div>
-                                        <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <FileText className="w-10 h-10 text-white drop-shadow-xl" />
+                                        <div className="p-6 space-y-3">
+                                            <h4 className="text-sm font-black text-slate-900 dark:text-white tracking-tight line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                                                {notesItem.title}
+                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                <GraduationCap className="w-3.5 h-3.5 text-primary" />
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                    Module {idx + 1}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        </>
-                    )}
+                        )}
+                    </div>
                 </div>
             </main>
         </div>

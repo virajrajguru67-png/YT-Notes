@@ -5,277 +5,277 @@
 @tailwind utilities;
 
 @layer utilities {
-  .animate-blob {
-    animation: blob 10s infinite;
-  }
-
-  .animation-delay-2000 {
-    animation-delay: 2s;
-  }
-
-  .animation-delay-4000 {
-    animation-delay: 4s;
-  }
-
-  @keyframes blob {
-    0% {
-      transform: translate(0px, 0px) scale(1);
+    .animate-blob {
+        animation: blob 10s infinite;
     }
 
-    33% {
-      transform: translate(30px, -50px) scale(1.1);
+    .animation-delay-2000 {
+        animation-delay: 2s;
     }
 
-    66% {
-      transform: translate(-20px, 20px) scale(0.9);
+    .animation-delay-4000 {
+        animation-delay: 4s;
     }
 
-    100% {
-      transform: translate(0px, 0px) scale(1);
+    @keyframes blob {
+        0% {
+            transform: translate(0px, 0px) scale(1);
+        }
+
+        33% {
+            transform: translate(30px, -50px) scale(1.1);
+        }
+
+        66% {
+            transform: translate(-20px, 20px) scale(0.9);
+        }
+
+        100% {
+            transform: translate(0px, 0px) scale(1);
+        }
     }
-  }
 }
 
 @layer base {
-  :root {
-    /* "Proper" Light Mode: Neutral & Dark Green */
-    --background: 0 0% 100%;
-    /* Pure White */
-    --foreground: 240 10% 3.9%;
-    /* Zinc-950 */
+    :root {
+        /* "Proper" Light Mode: Neutral & Dark Green */
+        --background: 0 0% 100%;
+        /* Pure White */
+        --foreground: 240 10% 3.9%;
+        /* Zinc-950 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 240 10% 3.9%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 240 10% 3.9%;
 
-    /* DARK GREEN PRIMARY (Green-800 equivalent) */
-    --primary: 142.1 70.6% 25%;
-    /* Much darker green */
-    --primary-foreground: 0 0% 100%;
+        /* DARK GREEN PRIMARY (Green-800 equivalent) */
+        --primary: 142.1 70.6% 25%;
+        /* Much darker green */
+        --primary-foreground: 0 0% 100%;
 
-    /* Secondary uses a very light tint of the dark green */
-    --secondary: 142 30% 96%;
-    --secondary-foreground: 142 70% 25%;
+        /* Secondary uses a very light tint of the dark green */
+        --secondary: 142 30% 96%;
+        --secondary-foreground: 142 70% 25%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+        --muted: 240 4.8% 95.9%;
+        --muted-foreground: 240 3.8% 46.1%;
 
-    --accent: 142 30% 95%;
-    --accent-foreground: 142 70% 25%;
+        --accent: 142 30% 95%;
+        --accent-foreground: 142 70% 25%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 142.1 70.6% 25%;
-    /* Match Primary */
+        --border: 240 5.9% 90%;
+        --input: 240 5.9% 90%;
+        --ring: 142.1 70.6% 25%;
+        /* Match Primary */
 
-    --radius: 0.75rem;
+        --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    /* Dark Green Sidebar Primary */
-    --sidebar-primary: 142.1 70.6% 25%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 142 30% 95%;
-    --sidebar-accent-foreground: 142 70% 25%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 142.1 70.6% 25%;
-  }
+        --sidebar-background: 0 0% 98%;
+        --sidebar-foreground: 240 5.3% 26.1%;
+        /* Dark Green Sidebar Primary */
+        --sidebar-primary: 142.1 70.6% 25%;
+        --sidebar-primary-foreground: 0 0% 98%;
+        --sidebar-accent: 142 30% 95%;
+        --sidebar-accent-foreground: 142 70% 25%;
+        --sidebar-border: 220 13% 91%;
+        --sidebar-ring: 142.1 70.6% 25%;
+    }
 
-  .dark {
-    /* "Proper" Dark Mode: Pure Black */
-    --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
+    .dark {
+        /* "Proper" Dark Mode: Pure Black */
+        --background: 0 0% 0%;
+        --foreground: 0 0% 98%;
 
-    --card: 0 0% 0%;
-    --card-foreground: 0 0% 98%;
+        --card: 0 0% 0%;
+        --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 0%;
-    --popover-foreground: 0 0% 98%;
+        --popover: 0 0% 0%;
+        --popover-foreground: 0 0% 98%;
 
-    /* PURE GREEN SHADES (Tailwind Green-500 for Dark Mode visibility) */
-    --primary: 142.1 70.6% 45.3%;
-    --primary-foreground: 144.9 80.4% 10%;
+        /* PURE GREEN SHADES (Tailwind Green-500 for Dark Mode visibility) */
+        --primary: 142.1 70.6% 45.3%;
+        --primary-foreground: 144.9 80.4% 10%;
 
-    --secondary: 240 3.7% 15.9%;
-    /* Zinc-800 */
-    --secondary-foreground: 0 0% 98%;
+        --secondary: 240 3.7% 15.9%;
+        /* Zinc-800 */
+        --secondary-foreground: 0 0% 98%;
 
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+        --muted: 240 3.7% 15.9%;
+        --muted-foreground: 240 5% 64.9%;
 
-    --accent: 142 30% 10%;
-    /* Dark Green Tint */
-    --accent-foreground: 0 0% 98%;
+        --accent: 142 30% 10%;
+        /* Dark Green Tint */
+        --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 142.1 70.6% 45.3%;
+        --border: 240 3.7% 15.9%;
+        --input: 240 3.7% 15.9%;
+        --ring: 142.1 70.6% 45.3%;
 
-    --sidebar-background: 240 10% 3.9%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 142.1 70.6% 45.3%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 142 30% 10%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 142.1 70.6% 45.3%;
-  }
+        --sidebar-background: 240 10% 3.9%;
+        --sidebar-foreground: 240 4.8% 95.9%;
+        --sidebar-primary: 142.1 70.6% 45.3%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 142 30% 10%;
+        --sidebar-accent-foreground: 0 0% 98%;
+        --sidebar-border: 240 3.7% 15.9%;
+        --sidebar-ring: 142.1 70.6% 45.3%;
+    }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+    * {
+        @apply border-border;
+    }
 
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
-    /* Proper Gradient: Only Green shades */
-    background-image: radial-gradient(circle at 15% 50%, rgba(22, 163, 74, 0.1), transparent 25%), radial-gradient(circle at 85% 30%, rgba(22, 163, 74, 0.05), transparent 25%);
-    background-attachment: fixed;
-  }
+    body {
+        @apply bg-background text-foreground antialiased;
+        font-family: 'Inter', system-ui, sans-serif;
+        /* Proper Gradient: Only Green shades */
+        background-image: radial-gradient(circle at 15% 50%, rgba(22, 163, 74, 0.1), transparent 25%), radial-gradient(circle at 85% 30%, rgba(22, 163, 74, 0.05), transparent 25%);
+        background-attachment: fixed;
+    }
 
-  .dark body {
-    background-image: none;
-  }
+    .dark body {
+        background-image: none;
+    }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-family: 'Outfit', sans-serif;
-  }
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        font-family: 'Outfit', sans-serif;
+    }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  /* Enhanced Glass Effects */
-  .glass {
-    @apply bg-white/10 dark:bg-black/20 backdrop-blur-lg border border-white/20 dark:border-white/10 shadow-lg;
-  }
-
-  .glass-card {
-    @apply bg-card/40 dark:bg-card/30 backdrop-blur-md border border-black/5 dark:border-white/10 shadow-sm transition-all duration-300 hover:bg-card/60 dark:hover:bg-card/50 hover:shadow-lg hover:border-primary/30;
-  }
-
-  .glass-panel {
-    @apply bg-background/60 backdrop-blur-xl border-r border-border;
-  }
-
-  .animate-gradient {
-    background-size: 200%;
-    animation: gradient 8s linear infinite;
-  }
-
-  @keyframes gradient {
-    0% {
-      background-position: 0% 50%;
+    .text-balance {
+        text-wrap: balance;
     }
 
-    50% {
-      background-position: 100% 50%;
+    /* Enhanced Glass Effects */
+    .glass {
+        @apply bg-white/10 dark:bg-black/20 backdrop-blur-lg border border-white/20 dark:border-white/10 shadow-lg;
     }
 
-    100% {
-      background-position: 0% 50%;
-    }
-  }
-
-  /* Added Animations */
-  @keyframes gradient-x {
-
-    0%,
-    100% {
-      background-position: 0% 50%;
+    .glass-card {
+        @apply bg-card/40 dark:bg-card/30 backdrop-blur-md border border-black/5 dark:border-white/10 shadow-sm transition-all duration-300 hover:bg-card/60 dark:hover:bg-card/50 hover:shadow-lg hover:border-primary/30;
     }
 
-    50% {
-      background-position: 100% 50%;
-    }
-  }
-
-  .animate-gradient-x {
-    background-size: 200% 200%;
-    animation: gradient-x 15s ease infinite;
-  }
-
-  @keyframes float {
-
-    0%,
-    100% {
-      transform: translateY(0);
+    .glass-panel {
+        @apply bg-background/60 backdrop-blur-xl border-r border-border;
     }
 
-    50% {
-      transform: translateY(-10px);
-    }
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-
-  /* 3D Study Hub Styles */
-  .perspective-1000 {
-    perspective: 1000px;
-  }
-
-  .backface-hidden {
-    backface-visibility: hidden;
-  }
-
-  .preserve-3d {
-    transform-style: preserve-3d;
-  }
-
-  .rotate-y-180 {
-    transform: rotateY(180deg);
-  }
-
-  /* Professional Green Gradient Utilities */
-  .text-gradient-green {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-emerald-500 to-green-400 dark:from-emerald-400 dark:to-green-300;
-  }
-
-  .bg-gradient-green {
-    @apply bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white shadow-lg shadow-emerald-500/20 border-0;
-  }
-
-  /* New Animations for Loading State */
-  @keyframes shimmer {
-    100% {
-      transform: translateX(100%);
-    }
-  }
-
-  @keyframes progress-indeterminate {
-    0% {
-      transform: translateX(-100%) scaleX(0.2);
+    .animate-gradient {
+        background-size: 200%;
+        animation: gradient 8s linear infinite;
     }
 
-    50% {
-      transform: translateX(0%) scaleX(0.5);
+    @keyframes gradient {
+        0% {
+            background-position: 0% 50%;
+        }
+
+        50% {
+            background-position: 100% 50%;
+        }
+
+        100% {
+            background-position: 0% 50%;
+        }
     }
 
-    100% {
-      transform: translateX(100%) scaleX(0.2);
-    }
-  }
+    /* Added Animations */
+    @keyframes gradient-x {
 
-  .animate-progress-indeterminate {
-    animation: progress-indeterminate 1.5s infinite linear;
-  }
+        0%,
+        100% {
+            background-position: 0% 50%;
+        }
+
+        50% {
+            background-position: 100% 50%;
+        }
+    }
+
+    .animate-gradient-x {
+        background-size: 200% 200%;
+        animation: gradient-x 15s ease infinite;
+    }
+
+    @keyframes float {
+
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-10px);
+        }
+    }
+
+    .animate-float {
+        animation: float 6s ease-in-out infinite;
+    }
+
+    /* 3D Study Hub Styles */
+    .perspective-1000 {
+        perspective: 1000px;
+    }
+
+    .backface-hidden {
+        backface-visibility: hidden;
+    }
+
+    .preserve-3d {
+        transform-style: preserve-3d;
+    }
+
+    .rotate-y-180 {
+        transform: rotateY(180deg);
+    }
+
+    /* Professional Green Gradient Utilities */
+    .text-gradient-green {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-emerald-500 to-green-400 dark:from-emerald-400 dark:to-green-300;
+    }
+
+    .bg-gradient-green {
+        @apply bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white shadow-lg shadow-emerald-500/20 border-0;
+    }
+
+    /* New Animations for Loading State */
+    @keyframes shimmer {
+        100% {
+            transform: translateX(100%);
+        }
+    }
+
+    @keyframes progress-indeterminate {
+        0% {
+            transform: translateX(-100%) scaleX(0.2);
+        }
+
+        50% {
+            transform: translateX(0%) scaleX(0.5);
+        }
+
+        100% {
+            transform: translateX(100%) scaleX(0.2);
+        }
+    }
+
+    .animate-progress-indeterminate {
+        animation: progress-indeterminate 1.5s infinite linear;
+    }
 }

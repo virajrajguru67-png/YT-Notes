@@ -133,6 +133,7 @@ export function useYoutubeNotes() {
     processVideo,
     setVideoInfo,
     setNotes,
+    setCurrentStep,
     reset,
   };
 }

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { FileText, Sparkles, Youtube, ExternalLink, PlayCircle, Loader2, Clock, RefreshCw } from "lucide-react";
-import { Sidebar } from "@/components/Sidebar";
-import { UrlInput } from "@/components/UrlInput";
-import { VideoPreview } from "@/components/VideoPreview";
-import { NotesDisplay } from "@/components/NotesDisplay";
-import { useYoutubeNotes } from "@/hooks/useYoutubeNotes";
-import { useAuth } from "@/contexts/AuthContext";
+import { FileText, Sparkles, Youtube, ExternalLink, PlayCircle, Loader2, Clock, RefreshCw, Download } from "lucide-react";
+import { Sidebar } from "../components/Sidebar";
+import { UrlInput } from "../components/UrlInput";
+import { VideoPreview } from "../components/VideoPreview";
+import { NotesDisplay } from "../components/NotesDisplay";
+import { useYoutubeNotes } from "../hooks/useYoutubeNotes";
+import { useAuth } from "../contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AntiGravityCanvas } from "@/components/ui/particle-effect-for-hero";
@@ -23,6 +24,7 @@ interface Recommendation {
 const Index = () => {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [isLoadingRecs, setIsLoadingRecs] = useState(false);
+  const [isPlaylistMode, setIsPlaylistMode] = useState(false);
   const [historyTrigger, setHistoryTrigger] = useState(0);
   const { token } = useAuth();
   const location = useLocation();
@@ -35,6 +37,7 @@ const Index = () => {
     processVideo,
     setVideoInfo,
     setNotes,
+    setCurrentStep,
     reset,
   } = useYoutubeNotes();
 
@@ -42,6 +45,7 @@ const Index = () => {
     if (!notes || !videoInfo?.title) return;
 
     setIsLoadingRecs(true);
+    setIsPlaylistMode(false);
     try {
       const res = await fetch('http://127.0.0.1:3001/api/recommendations', {
         method: 'POST',
@@ -63,12 +67,13 @@ const Index = () => {
   }, [notes, videoInfo?.title]);
 
   useEffect(() => {
+    if (isPlaylistMode) return; // Keep playlist visible
     if (notes && videoInfo?.title) {
       fetchRecs();
     } else {
       setRecommendations([]);
     }
-  }, [fetchRecs, notes, videoInfo?.title]);
+  }, [fetchRecs, notes, videoInfo?.title, isPlaylistMode]);
 
   const handleHistorySelect = useCallback((item: any) => {
     setVideoInfo({
@@ -90,10 +95,96 @@ const Index = () => {
     }
   }, [location.state, handleHistorySelect]);
 
-  const handleSubmit = async (url: string, manualTranscript?: string) => {
-    await processVideo(url, manualTranscript);
-    setHistoryTrigger(prev => prev + 1);
+  const { toast } = useToast();
+
+  const extractPlaylistId = (url: string) => {
+    console.log("Attempting to extract playlist ID from:", url);
+    const match = url.match(/[?&]list=([^#&?]+)/);
+    const id = match ? match[1] : null;
+    console.log("Extracted ID:", id);
+    return id;
   };
+
+  const fetchPlaylist = async (playlistId: string) => {
+    setIsLoadingRecs(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:3001/api/playlist/${playlistId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.videos) {
+        const mappedVideos = data.videos.map((v: any) => ({
+          videoId: v.videoId,
+          title: v.title,
+          thumbnail: v.thumbnail,
+          channel: v.channel
+        }));
+        setRecommendations(mappedVideos);
+        setIsPlaylistMode(true);
+        toast({ title: "Playlist loaded!", description: `Found ${data.videos.length} videos.` });
+        return mappedVideos;
+      } else {
+        throw new Error(data.error || "Failed to load playlist");
+      }
+    } catch (e: any) {
+      console.error("Failed to fetch playlist", e);
+      toast({ variant: "destructive", title: "Playlist Error", description: e.message || "Could not fetch playlist videos." });
+      return null;
+    } finally {
+      setIsLoadingRecs(false);
+    }
+  };
+
+  const handleSubmit = async (url: string, manualTranscript?: string) => {
+    console.log("handleSubmit called with:", url);
+    const playlistId = extractPlaylistId(url);
+    if (playlistId) {
+      console.log("Detected playlist ID:", playlistId);
+      // It's a playlist!
+      const videos = await fetchPlaylist(playlistId);
+
+      // Reset active video/notes state since we are just loading a playlist list
+      if (videos && !url.includes("watch?v=")) {
+        setVideoInfo(null);
+        setNotes(null);
+        setCurrentStep(undefined);
+      }
+
+      // If it also has a video ID (e.g. watch?v=...&list=...), process the video too
+      // If it's just a playlist URL (playlist?list=...), auto-play the first video
+      const hasSpecificVideo = url.includes("watch?v=");
+
+      if (hasSpecificVideo) {
+        await processVideo(url, manualTranscript);
+        setHistoryTrigger(prev => prev + 1);
+      } else {
+        toast({ title: "Playlist Ready", description: "Select a video from the sidebar to start learning!" });
+      }
+    } else {
+      // Regular video
+      await processVideo(url, manualTranscript);
+      setHistoryTrigger(prev => prev + 1);
+    }
+  };
+
+  const handleNextVideo = useCallback(() => {
+    if (!videoInfo || !recommendations.length) return;
+
+    // Find current video index (recommendations holds playlist videos in playlist mode)
+    const currentIndex = recommendations.findIndex(r => r.videoId === videoInfo.id);
+
+    if (currentIndex >= 0 && currentIndex < recommendations.length - 1) {
+      const nextVideo = recommendations[currentIndex + 1];
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      processVideo(`https://www.youtube.com/watch?v=${nextVideo.videoId}`);
+      setHistoryTrigger(prev => prev + 1);
+    } else {
+      toast({ title: "End of Playlist", description: "You've reached the last video!" });
+    }
+  }, [videoInfo, recommendations, processVideo]);
 
   return (
     <>
@@ -111,7 +202,7 @@ const Index = () => {
 
 
         <main className="lg:pl-[280px]">
-          {(!videoInfo && !notes && !isLoadingVideo && !isLoadingNotes) ? (
+          {(!videoInfo && !notes && !isLoadingVideo && !isLoadingNotes && !isPlaylistMode) ? (
             <div className="relative h-screen flex items-center justify-center overflow-hidden">
               {/* Particle Canvas Background */}
               <div className="absolute inset-0 z-0">
@@ -182,7 +273,8 @@ const Index = () => {
               <div className="grid lg:grid-cols-12 gap-8 h-auto lg:h-full max-w-[1600px] mx-auto w-full">
                 {/* Video Column */}
                 {/* Video Column */}
-                <div className="lg:col-span-4 flex flex-col gap-2 h-auto lg:h-full min-h-0">
+                {/* Video Column */}
+                <div className={`${isPlaylistMode && !videoInfo ? 'lg:col-span-12' : 'lg:col-span-4'} flex flex-col gap-2 h-auto lg:h-full min-h-0`}>
                   <div className="glass-card p-0 rounded-3xl overflow-hidden shrink-0 border-none shadow-2xl bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl max-w-sm mx-auto w-full lg:max-w-none">
                     <VideoPreview video={videoInfo} isLoading={isLoadingVideo} />
                   </div>
@@ -192,7 +284,7 @@ const Index = () => {
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 flex items-center gap-2.5">
                         <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                        Recommended Videos
+                        {isPlaylistMode ? "Playlist Videos" : "Recommended Videos"}
                       </h3>
                       {recommendations.length > 0 && (
                         <Button
@@ -208,7 +300,7 @@ const Index = () => {
                       )}
                     </div>
 
-                    <div className="space-y-3 overflow-y-auto custom-scrollbar pr-2 h-[240px]">
+                    <div className={`space-y-3 overflow-y-auto custom-scrollbar pr-2 ${isPlaylistMode && !videoInfo ? 'h-[75vh]' : 'h-[240px]'} transition-all duration-500`}>
                       {isLoadingRecs ? (
                         <div className="space-y-4 pt-1">
                           {[1, 2, 3].map((i) => (
@@ -224,7 +316,7 @@ const Index = () => {
                       ) : recommendations.length > 0 ? (
                         <div className="space-y-3">
                           {recommendations.map((rec, idx) => (
-                            <button
+                            <div
                               key={idx}
                               onClick={async () => {
                                 if (rec.videoId) {
@@ -235,7 +327,19 @@ const Index = () => {
                                   window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(rec.query)}`, '_blank');
                                 }
                               }}
-                              className="group w-full text-left p-2 rounded-2xl transition-all duration-300 hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-slate-100 dark:hover:border-white/10 hover:shadow-xl hover:shadow-black/5 active:scale-[0.98] mb-1"
+                              className="group w-full text-left p-2 rounded-2xl transition-all duration-300 hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-slate-100 dark:hover:border-white/10 hover:shadow-xl hover:shadow-black/5 active:scale-[0.98] mb-1 cursor-pointer"
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  if (rec.videoId) {
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    processVideo(`https://www.youtube.com/watch?v=${rec.videoId}`);
+                                    setHistoryTrigger(prev => prev + 1);
+                                  }
+                                }
+                              }}
                             >
                               <div className="flex items-center gap-4">
                                 <div className="relative w-28 aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-black/60 shrink-0 border border-slate-100 dark:border-white/5 group-hover:border-primary/40 transition-all duration-500 shadow-sm">
@@ -265,10 +369,10 @@ const Index = () => {
                                   </p>
                                   <div className="flex items-center gap-1.5">
                                     {rec.channel ? (
-                                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                                      <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
                                         <div className="w-1 h-1 rounded-full bg-red-500" />
                                         {rec.channel}
-                                      </p>
+                                      </div>
                                     ) : (
                                       <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/10">
                                         <Sparkles className="w-2.5 h-2.5 text-primary" />
@@ -278,7 +382,26 @@ const Index = () => {
                                   </div>
                                 </div>
                               </div>
-                            </button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-500 transition-colors opacity-0 group-hover:opacity-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (rec.videoId) {
+                                    const link = document.createElement('a');
+                                    link.href = `http://127.0.0.1:3001/api/download/${rec.videoId}`;
+                                    link.target = '_blank';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }
+                                }}
+                                title="Download Video"
+                              >
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            </div>
                           ))}
                         </div>
                       ) : (
@@ -294,20 +417,23 @@ const Index = () => {
                 </div>
 
                 {/* Notes Column - Full Height */}
-                <div className="lg:col-span-8 h-auto lg:h-full min-h-0">
-                  <NotesDisplay
-                    notes={notes || ""}
-                    isLoading={isLoadingNotes}
-                    videoTitle={videoInfo?.title}
-                    videoId={videoInfo?.id}
-                    currentStep={currentStep}
-                  />
-                </div>
+                {(!isPlaylistMode || videoInfo) && (
+                  <div className="lg:col-span-8 h-auto lg:h-full min-h-0">
+                    <NotesDisplay
+                      notes={notes || ""}
+                      isLoading={isLoadingNotes}
+                      videoTitle={videoInfo?.title}
+                      videoId={videoInfo?.id}
+                      currentStep={currentStep}
+                      onNextVideo={isPlaylistMode ? handleNextVideo : undefined}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
-        </main>
-      </div>
+        </main >
+      </div >
     </>
   );
 };

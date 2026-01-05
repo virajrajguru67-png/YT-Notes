@@ -19,10 +19,12 @@ const API_BASE_URL = 'http://127.0.0.1:3001/api';
 
 export function useNotesHistory() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { token, isAuthenticated } = useAuth();
 
   const fetchHistory = async () => {
     if (!token) return;
+    setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/history`, {
         headers: {
@@ -43,6 +45,8 @@ export function useNotesHistory() {
       }
     } catch (error) {
       console.error("Failed to fetch history from MySQL:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -92,5 +96,5 @@ export function useNotesHistory() {
     }
   };
 
-  return { history, addToHistory, clearHistory, deleteNote, fetchHistory };
+  return { history, isLoading, addToHistory, clearHistory, deleteNote, fetchHistory };
 }

@@ -1,433 +1,123 @@
-
+import { Sidebar } from "@/components/Sidebar";
+import { Shield, Users, FileText, Database, Activity, AlertTriangle, CheckCircle, Search, RefreshCw, Trash2, MoreVertical } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Users, FileText, Activity, Lock, Unlock, Clock, AlertTriangle, Search, Eye, BarChart3 } from "lucide-react";
-import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import ReactMarkdown from "react-markdown";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-
-interface AnalyticsData {
-    date: string;
-    count: number;
-}
-
-interface DashboardStats {
-    users: number;
-    notes: number;
-    analytics?: {
-        users: AnalyticsData[];
-        notes: AnalyticsData[];
-    };
-}
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function AdminDashboard() {
-    const { token, isAdmin } = useAuth();
-    const navigate = useNavigate();
-    const [stats, setStats] = useState<DashboardStats>({ users: 0, notes: 0 });
-    const [users, setUsers] = useState<any[]>([]);
-    const [notes, setNotes] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [userSearch, setUserSearch] = useState("");
-    const [noteSearch, setNoteSearch] = useState("");
-    const [viewNote, setViewNote] = useState<any | null>(null);
-
-    useEffect(() => {
-        if (!isAdmin) {
-            toast.error("Access Denied: Admins only.");
-            navigate("/");
-            return;
-        }
-        fetchData();
-    }, [isAdmin, navigate]);
-
-    const fetchData = async () => {
-        setIsLoading(true);
-        try {
-            const headers = { Authorization: `Bearer ${token}` };
-            const fetchWithAuth = async (url: string) => {
-                const res = await fetch(url, { headers });
-                if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
-                return res.json();
-            };
-
-            const [statsData, usersData, notesData] = await Promise.all([
-                fetchWithAuth("/api/admin/stats"),
-                fetchWithAuth("/api/admin/users"),
-                fetchWithAuth("/api/admin/notes")
-            ]);
-
-            setStats(statsData);
-            setUsers(usersData);
-            setNotes(notesData);
-        } catch (error) {
-            console.error("Admin Dashboard Error:", error);
-            toast.error("Failed to load admin data");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const suspendUser = async (id: number, duration: string) => {
-        try {
-            const res = await fetch(`/api/admin/users/${id}/suspend`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ duration })
-            });
-            if (res.ok) {
-                toast.success(`User suspended for ${duration}`);
-                fetchData();
-            } else {
-                toast.error("Failed to suspend user");
-            }
-        } catch (error) {
-            toast.error("Error suspending user");
-        }
-    };
-
-    const unsuspendUser = async (id: number) => {
-        try {
-            const res = await fetch(`/api/admin/users/${id}/unsuspend`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                toast.success("User unsuspended");
-                fetchData();
-            } else {
-                toast.error("Failed to unsuspend user");
-            }
-        } catch (error) {
-            toast.error("Error unsuspending user");
-        }
-    };
-
-    const deleteUser = async (id: number) => {
-        if (!confirm("Delete this user? This cannot be undone.")) return;
-        try {
-            const res = await fetch(`/api/admin/users/${id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                toast.success("User deleted");
-                fetchData();
-            } else {
-                toast.error("Failed to delete user");
-            }
-        } catch (error) {
-            toast.error("Error deleting user");
-        }
-    };
-
-    const deleteNote = async (id: number) => {
-        if (!confirm("Delete this note?")) return;
-        try {
-            const res = await fetch(`/api/admin/notes/${id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                toast.success("Note deleted");
-                fetchData();
-            } else {
-                toast.error("Failed to delete note");
-            }
-        } catch (error) {
-            toast.error("Error deleting note");
-        }
-    };
-
-    const filteredUsers = users.filter(u =>
-        u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.email.toLowerCase().includes(userSearch.toLowerCase())
-    );
-
-    const filteredNotes = notes.filter(n =>
-        n.title.toLowerCase().includes(noteSearch.toLowerCase()) ||
-        n.video_id.toLowerCase().includes(noteSearch.toLowerCase()) ||
-        n.username.toLowerCase().includes(noteSearch.toLowerCase())
-    );
-
-    if (!isAdmin) return null;
+    const { token } = useAuth();
+    const [stats, setStats] = useState({ users: 0, notes: 0, storage: "0MB" });
+    const [recentLogs, setRecentLogs] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
 
     return (
-        <div className="container mx-auto p-6 space-y-8 animate-fade-in pb-20">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                        Admin Dashboard
-                    </h1>
-                    <p className="text-muted-foreground mt-1">Platform management and analytics overview.</p>
-                </div>
-                <Button onClick={fetchData} variant="outline" className="gap-2">
-                    <Activity className="h-4 w-4" /> Refresh Data
-                </Button>
-            </div>
+        <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#020617] font-sans selection:bg-primary/20 relative">
+            <Sidebar />
 
-            <Tabs defaultValue="overview" className="space-y-6">
-                <TabsList>
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="users">Users</TabsTrigger>
-                    <TabsTrigger value="notes">Content</TabsTrigger>
-                </TabsList>
-
-                {/* OVERVIEW TAB */}
-                <TabsContent value="overview" className="space-y-6">
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                                <Users className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{stats.users}</div>
-                                <p className="text-xs text-muted-foreground">+ from last month</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Total Notes</CardTitle>
-                                <FileText className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{stats.notes}</div>
-                                <p className="text-xs text-muted-foreground">Generated guides</p>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* CHARTS */}
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <BarChart3 className="w-4 h-4 text-primary" /> User Growth (Last 7 Days)
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="h-[300px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={stats.analytics?.users || []}>
-                                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                                        <XAxis dataKey="date" fontSize={12} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { weekday: 'short' })} />
-                                        <YAxis fontSize={12} allowDecimals={false} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                                            itemStyle={{ color: 'var(--foreground)' }}
-                                            labelStyle={{ color: 'var(--muted-foreground)' }}
-                                        />
-                                        <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4, fill: 'hsl(var(--primary))' }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-primary" /> Content Generation (Last 7 Days)
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="h-[300px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={stats.analytics?.notes || []}>
-                                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                                        <XAxis dataKey="date" fontSize={12} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { weekday: 'short' })} />
-                                        <YAxis fontSize={12} allowDecimals={false} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                                            itemStyle={{ color: 'var(--foreground)' }}
-                                            labelStyle={{ color: 'var(--muted-foreground)' }}
-                                            cursor={{ fill: 'var(--accent)' }}
-                                        />
-                                        <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-
-                {/* USERS TAB */}
-                <TabsContent value="users" className="space-y-4">
-                    <div className="flex items-center gap-4">
-                        <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search users by name or email..."
-                                className="pl-9"
-                                value={userSearch}
-                                onChange={(e) => setUserSearch(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <Card>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>User</TableHead>
-                                    <TableHead>Role</TableHead>
-                                    <TableHead>Joined</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredUsers.map((u) => (
-                                    <TableRow key={u.id}>
-                                        <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">{u.username}</span>
-                                                <span className="text-xs text-muted-foreground">{u.email}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className={u.role === 'admin' ? "border-primary/50 text-primary bg-primary/10" : ""}>
-                                                    {u.role}
-                                                </Badge>
-                                                {u.suspended_until && new Date(u.suspended_until) > new Date() && (
-                                                    <Badge variant="destructive">
-                                                        <Lock className="w-3 h-3 mr-1" /> Suspended
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {new Date(u.created_at).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {u.role !== 'admin' && (
-                                                <div className="flex justify-end gap-1">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/20">
-                                                                <AlertTriangle className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Suspend Access</DropdownMenuLabel>
-                                                            <DropdownMenuSeparator />
-                                                            {u.suspended_until && new Date(u.suspended_until) > new Date() ? (
-                                                                <DropdownMenuItem onClick={() => unsuspendUser(u.id)} className="text-green-600 dark:text-green-400 cursor-pointer">
-                                                                    <Unlock className="w-4 h-4 mr-2" /> Unsuspend
-                                                                </DropdownMenuItem>
-                                                            ) : (
-                                                                <>
-                                                                    {['day', 'week', 'month', 'year'].map(period => (
-                                                                        <DropdownMenuItem key={period} onClick={() => suspendUser(u.id, period)} className="cursor-pointer capitalize">
-                                                                            <Clock className="w-4 h-4 mr-2" /> 1 {period}
-                                                                        </DropdownMenuItem>
-                                                                    ))}
-                                                                    <DropdownMenuSeparator />
-                                                                    <DropdownMenuItem onClick={() => suspendUser(u.id, 'permanent')} className="text-destructive cursor-pointer">
-                                                                        <Lock className="w-4 h-4 mr-2" /> Permanent
-                                                                    </DropdownMenuItem>
-                                                                </>
-                                                            )}
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                    <Button variant="ghost" size="icon" onClick={() => deleteUser(u.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                </TabsContent>
-
-                {/* CONTENT TAB */}
-                <TabsContent value="notes" className="space-y-4">
-                    <div className="flex items-center gap-4">
-                        <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search notes by title, owner, or video..."
-                                className="pl-9"
-                                value={noteSearch}
-                                onChange={(e) => setNoteSearch(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <Card>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Note Info</TableHead>
-                                    <TableHead>Created By</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredNotes.map((n) => (
-                                    <TableRow key={n.id}>
-                                        <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium truncate max-w-[300px]">{n.title}</span>
-                                                <span className="text-xs text-muted-foreground font-mono">{n.video_id}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>{n.username}</TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => setViewNote(n)} className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10">
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => deleteNote(n.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-
-            {/* VIEW NOTE DIALOG */}
-            <Dialog open={!!viewNote} onOpenChange={() => setViewNote(null)}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>{viewNote?.title}</DialogTitle>
-                    </DialogHeader>
-                    <ScrollArea className="h-[60vh] mt-4 rounded-md border p-4">
-                        <div className="prose dark:prose-invert max-w-none">
-                            <p className="text-muted-foreground italic">
-                                Note Content Preview:
-                                <br />
-                                {viewNote?.content || "Content not loaded in list view. Implement fetch for full details."}
+            <main className="lg:pl-[280px] min-h-screen flex flex-col font-sans">
+                <header className="px-6 pb-6 pt-20 md:p-10 border-b border-slate-100 dark:border-white/5 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl shrink-0">
+                    <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div>
+                            <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white tracking-tight flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                                Admin Command Center
+                                <div className="px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full animate-pulse w-fit">
+                                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Live Control</span>
+                                </div>
+                            </h1>
+                            <p className="text-slate-500 dark:text-slate-400 font-medium mt-2">
+                                System-wide diagnostics and user management for Genius AI.
                             </p>
                         </div>
-                    </ScrollArea>
-                </DialogContent>
-            </Dialog>
+                        <Button className="h-12 px-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 shadow-xl text-slate-900 dark:text-white font-black text-xs uppercase tracking-widest gap-2.5 hover:bg-slate-50 transition-all">
+                            <Activity className="w-4 h-4 text-primary" />
+                            System Audit
+                        </Button>
+                    </div>
+                </header>
+
+                <div className="flex-1 p-6 md:p-10">
+                    <div className="max-w-7xl mx-auto space-y-10">
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            {[
+                                { label: "Total Scholars", value: "2.4k", icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
+                                { label: "Knowledge Maps", value: "18.2k", icon: FileText, color: "text-primary", bg: "bg-primary/10" },
+                                { label: "Vector Storage", value: "4.8GB", icon: Database, color: "text-emerald-500", bg: "bg-emerald-500/10" }
+                            ].map((stat, i) => (
+                                <div key={i} className="glass-card p-10 rounded-[40px] border-none shadow-xl bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl space-y-6">
+                                    <div className={`w-14 h-14 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
+                                        <stat.icon className="w-7 h-7" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{stat.value}</h4>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{stat.label}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Recent Activity Table */}
+                        <section className="glass-card rounded-[40px] border-none shadow-2xl bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl overflow-hidden">
+                            <div className="p-8 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
+                                    <Activity className="w-4 h-4" />
+                                    Security & Activity Logs
+                                </h3>
+                                <div className="flex items-center gap-4">
+                                    <div className="relative group">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                                        <Input placeholder="Filter logs..." className="pl-9 h-10 w-48 rounded-xl bg-slate-100/50 dark:bg-white/5 border-none text-xs font-bold" />
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-primary/10 hover:text-primary transition-all">
+                                        <RefreshCw className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="bg-slate-50/50 dark:bg-black/20">
+                                            {["Event", "User", "Status", "Timestamp", ""].map(header => (
+                                                <th key={header} className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{header}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50 dark:divide-white/5">
+                                        {[1, 2, 3, 4, 5].map((item) => (
+                                            <tr key={item} className="group hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors">
+                                                <td className="px-8 py-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Note Generation</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <span className="text-xs font-medium text-slate-500">scholar_{item * 123}</span>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                                        <CheckCircle className="w-3 h-3" />
+                                                        <span className="text-[9px] font-black uppercase tracking-widest">Success</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-xs text-slate-400 font-medium">2 mins ago</td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <MoreVertical className="w-4 h-4 text-slate-400" />
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </main>
         </div>
     );
 }

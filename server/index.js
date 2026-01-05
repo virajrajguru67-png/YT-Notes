@@ -1,4 +1,8 @@
 const express = require('express');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+const ffmpegPath = require('ffmpeg-static');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const axios = require('axios');
@@ -12,7 +16,8 @@ const multer = require('multer');
 const nodemailer = require('nodemailer');
 app.enable('trust proxy');
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Debug Middleware
 app.use((req, res, next) => {
@@ -68,12 +73,79 @@ const dbConfig = {
     queueLimit: 0
 };
 
+// Database Connection
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME || 'youtube_notes',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
 
+// Groq API Key Rotation
+const Groq = require("groq-sdk");
 
-const pool = mysql.createPool(dbConfig);
+const groqKeys = (process.env.GROQ_API_KEYS || '').split(',').map(k => k.trim()).filter(k => k);
+if (groqKeys.length === 0) console.warn("WARNING: No GROQ_API_KEYS provided in .env");
+let currentGroqKeyIndex = 0;
+
+function getNextGroqKey() {
+    currentGroqKeyIndex = (currentGroqKeyIndex + 1) % groqKeys.length;
+    console.log(`[Groq] Switching to API Key #${currentGroqKeyIndex + 1}`);
+    return groqKeys[currentGroqKeyIndex];
+}
+
+function getCurrentGroqKey() {
+    return groqKeys[currentGroqKeyIndex];
+}
+
+async function generateAI(messages, { stream = false, model = "llama-3.3-70b-versatile", json = false, max_tokens = 4096, temperature = 0.5 } = {}) {
+    // Collect extra options to pass down
+    const options_extra = { max_tokens, temperature };
+    async function attempt(retryCount = 0) {
+        try {
+            const groq = new Groq({ apiKey: getCurrentGroqKey() });
+
+            const options = {
+                model,
+                messages,
+                stream,
+                max_tokens: options_extra.max_tokens,
+                temperature: options_extra.temperature
+            };
+
+            if (json) {
+                options.response_format = { type: "json_object" };
+            }
+
+            if (stream) {
+                return await groq.chat.completions.create(options);
+            } else {
+                return await groq.chat.completions.create(options);
+            }
+        } catch (e) {
+            console.error(`Groq Gen Error (Attempt ${retryCount}):`, e.message);
+            // Retry on 429 (Rate Limit)
+            if (retryCount < 10 && (e.message.includes('429') || e.status === 429)) {
+                console.log("Rotating Groq Key due to Rate Limit...");
+                getNextGroqKey();
+                await new Promise(r => setTimeout(r, 2000));
+                return attempt(retryCount + 1);
+            }
+            throw e;
+        }
+    }
+    return attempt();
+}
+
+// Ensure the uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
 
 const { YoutubeTranscript } = require('youtube-transcript');
 const ytdl = require('@distube/ytdl-core');
+const ytDlp = require('yt-dlp-exec');
 const os = require('os');
 const FormData = require('form-data');
 const bcrypt = require('bcryptjs');
@@ -98,7 +170,7 @@ const transporter = nodemailer.createTransport({
 
 // YouTube API Key Rotation Helper
 const YOUTUBE_KEYS = (process.env.YOUTUBE_API_KEYS || "").split(',').filter(k => k.trim());
-let currentKeyIndex = 0;
+let currentYouTubeKeyIndex = 0;
 
 async function fetchFromYouTube(endpoint, params) {
     if (YOUTUBE_KEYS.length === 0) {
@@ -108,7 +180,7 @@ async function fetchFromYouTube(endpoint, params) {
     // Try each key starting from the current one
     let lastError = null;
     for (let i = 0; i < YOUTUBE_KEYS.length; i++) {
-        const attemptIndex = (currentKeyIndex + i) % YOUTUBE_KEYS.length;
+        const attemptIndex = (currentYouTubeKeyIndex + i) % YOUTUBE_KEYS.length;
         const key = YOUTUBE_KEYS[attemptIndex];
 
         try {
@@ -116,28 +188,61 @@ async function fetchFromYouTube(endpoint, params) {
                 params: { ...params, key }
             });
 
-            // If we successfully used a different key, update the global index
-            if (currentKeyIndex !== attemptIndex) {
-                console.log(`Successfully switched to YouTube Key ${attemptIndex + 1}`);
+            if (response.data) {
+                // If we successfully used a different key, update the global index
+                if (currentYouTubeKeyIndex !== attemptIndex) {
+                    console.log(`Successfully switched to YouTube Key ${attemptIndex + 1}`);
+                    currentYouTubeKeyIndex = attemptIndex;
+                }
+                return response.data;
             }
-            currentKeyIndex = attemptIndex;
-            return response.data;
         } catch (error) {
             lastError = error;
             const status = error.response?.status;
             const errorMsg = error.response?.data?.error?.message || error.message;
 
-            // If it's a quota error (403) or a "key not valid" error (400), try the next key
-            // Note: 403 can also be "forbidden" for other reasons, but usually quota on search
-            if (status === 403 || status === 400 || errorMsg.toLowerCase().includes('quota') || i < YOUTUBE_KEYS.length - 1) {
-                console.warn(`YouTube Key ${attemptIndex + 1} failed (${status}): ${errorMsg.substring(0, 100)}. Trying next key...`);
-                continue;
-            } else {
-                throw error;
+            // CRITICAL CHECK: If the API is simply not enabled for this project, retrying other keys (from same project) won't help.
+            // Fail fast to allow fallback mechanisms (yt-dlp) to work without annoyance.
+            if (errorMsg.includes('has not been used in project') || errorMsg.includes('is disabled')) {
+                console.warn(`YouTube Data API is disabled on Key ${attemptIndex + 1}. Skipping remaining keys to trigger fallback.`);
+                throw error; // Break loop immediately
             }
+
+            // For Quota (403/429) or Bad Request (400), we DO retry.
+            if (status === 429 || status === 403 || status === 400 || errorMsg.toLowerCase().includes('quota')) {
+                // Only log if we have more keys to try
+                if (i < YOUTUBE_KEYS.length - 1) {
+                    console.warn(`YouTube Key ${attemptIndex + 1} failed (${status}). Rotating...`);
+                    continue;
+                }
+            }
+            // For other errors (500, etc) or if we ran out of keys:
+            if (i === YOUTUBE_KEYS.length - 1) throw lastError;
         }
     }
     throw lastError;
+}
+
+// Helper: Fetch Playlist Items
+async function fetchPlaylistItems(playlistId) {
+    if (!playlistId) throw new Error("Playlist ID is required");
+
+    // Fetch playlist items
+    const data = await fetchFromYouTube('playlistItems', {
+        part: 'snippet',
+        playlistId: playlistId,
+        maxResults: 50
+    });
+
+    if (!data.items) return [];
+
+    return data.items.map(item => ({
+        videoId: item.snippet.resourceId.videoId,
+        title: item.snippet.title,
+        thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url,
+        channel: item.snippet.videoOwnerChannelTitle,
+        publishedAt: item.snippet.publishedAt
+    })).filter(video => video.title !== 'Private video');
 }
 
 // Middleware: Authenticate JWT
@@ -200,124 +305,137 @@ async function downloadAudio(videoId) {
         if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
     } catch (e) { }
 
-    // STRATEGY 1: Try @distube/ytdl-core (Pure JS, lighter)
+    // PURPOSE: Prioritize yt-dlp to avoid ytdl-core garbage file creation and reliability issues.
+
+    // STRATEGY 1: yt-dlp (External process, reliable, supports cookies automatically if configured)
     try {
-        console.log(`[Audio] Trying ytdl-core for: ${videoId}`);
-        const cookies = await getLocalCookies();
+        console.log(`[Audio] Downloading via yt-dlp: ${videoUrl}`);
 
-        await new Promise((resolve, reject) => {
-            const stream = ytdl(videoUrl, {
-                quality: 'lowestaudio', // or 'highestaudio' - we just need speech
-                filter: 'audioonly',
-                requestOptions: {
-                    headers: {
-                        Cookie: cookies
-                    }
-                }
-            });
+        const outputTemplate = path.join(tempDir, `${videoId}.%(ext)s`);
 
-            const writer = fs.createWriteStream(outputPath);
-            stream.pipe(writer);
-
-            stream.on('error', (err) => {
-                console.warn(`[Audio] ytdl-core stream error: ${err.message}`);
-                writer.close();
-                reject(err);
-            });
-
-            writer.on('finish', () => {
-                console.log(`[Audio] ytdl-core download complete: ${outputPath}`);
-                resolve(outputPath);
-            });
-            writer.on('error', (err) => {
-                console.error(`[Audio] File write error: ${err.message}`);
-                reject(err);
-            });
+        await ytDlp(videoUrl, {
+            format: 'bestaudio[ext=m4a]/bestaudio', // Prefer m4a directly
+            output: outputTemplate,
+            noCheckCertificates: true,
+            preferFreeFormats: true,
+            keepVideo: true,
+            addHeader: [
+                'referer:youtube.com',
+                'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            ]
         });
 
-        return outputPath;
+        // Find the downloaded file
+        const downloadedFile = fs.readdirSync(tempDir).find(file => {
+            if (!file.startsWith(videoId)) return false;
+            return file.endsWith('.m4a') || file.endsWith('.webm') || file.endsWith('.mp3');
+        });
 
-    } catch (ytdlError) {
-        console.warn(`[Audio] ytdl-core failed (${ytdlError.message}). Switching to yt-dlp...`);
+        if (!downloadedFile) throw new Error("File downloaded but not found in temp");
 
-        // Clean up potential 0-byte files from ytdl-core
+        const finalPath = path.join(tempDir, downloadedFile);
+        console.log(`[Audio] yt-dlp download complete: ${finalPath}, Size: ${fs.statSync(finalPath).size}`);
+        return finalPath;
+
+    } catch (dlpError) {
+        console.warn(`[Audio] yt-dlp failed (${dlpError.message}). Switching to ytdl-core...`);
+
+        // STRATEGY 2: @distube/ytdl-core (Pure JS fallback)
         try {
-            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-        } catch (e) { }
+            console.log(`[Audio] Trying ytdl-core for: ${videoId}`);
+            const cookies = await getLocalCookies();
 
-        // STRATEGY 2: yt-dlp (External process, reliable but heavier)
-        return new Promise(async (resolve, reject) => {
-            try {
-                console.log(`[Audio] Downloading via yt-dlp: ${videoUrl}`);
-
-                const outputTemplate = path.join(tempDir, `${videoId}.%(ext)s`);
-
-                await ytDlp(videoUrl, {
-                    format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
-                    output: outputTemplate,
-                    noCheckCertificates: true,
-                    preferFreeFormats: true,
-                    keepVideo: true, // Sometimes needed to prevent deletion of merged files? No, default is fine.
-
-                    addHeader: [
-                        'referer:youtube.com',
-                        'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    ]
-                });
-
-                // Find the downloaded file (checking strongly for size > 0)
-                const downloadedFile = fs.readdirSync(tempDir).find(file => {
-                    if (!file.startsWith(videoId)) return false;
-                    const validExt = file.endsWith('.m4a') || file.endsWith('.webm') || file.endsWith('.mp3');
-                    if (!validExt) return false;
-
-                    try {
-                        const stats = fs.statSync(path.join(tempDir, file));
-                        return stats.size > 0;
-                    } catch (e) {
-                        return false;
+            return await new Promise((resolve, reject) => {
+                const stream = ytdl(videoUrl, {
+                    quality: 'lowestaudio',
+                    filter: 'audioonly',
+                    requestOptions: {
+                        headers: { Cookie: cookies }
                     }
                 });
 
-                if (!downloadedFile) throw new Error('Download appeared to finish but no valid (non-empty) file was found.');
+                const writer = fs.createWriteStream(outputPath);
+                stream.pipe(writer);
 
-                const finalPath = path.join(tempDir, downloadedFile);
-                console.log(`[Audio] yt-dlp download complete: ${finalPath}, Size: ${fs.statSync(finalPath).size}`);
-                resolve(finalPath);
+                stream.on('error', (err) => {
+                    console.warn(`[Audio] ytdl-core stream error: ${err.message}`);
+                    writer.close();
+                    reject(err);
+                });
 
-            } catch (error) {
-                console.error('[Audio] yt-dlp Download Error:', error);
-                reject(error);
-            }
-        });
+                writer.on('finish', () => {
+                    console.log(`[Audio] ytdl-core download complete: ${outputPath}`);
+                    resolve(outputPath);
+                });
+                writer.on('error', (err) => {
+                    reject(err);
+                });
+            });
+        } catch (ytdlError) {
+            throw new Error(`All download methods failed. yt-dlp: ${dlpError.message}, ytdl-core: ${ytdlError.message}`);
+        }
     }
 }
 
 // Helper: Transcribe Audio with Groq Whisper
 async function transcribeWithWhisper(filePath) {
     console.log('Transcribing audio with Groq Whisper...');
-    const formData = new FormData();
-    formData.append('file', fs.createReadStream(filePath));
-    formData.append('model', 'whisper-large-v3');
-    formData.append('response_format', 'text');
+    const MAX_SIZE_BYTES = 25 * 1024 * 1024; // 25MB limit for Groq Whisper
+
+    const transcribeChunk = async (pathToFile, attempt = 1) => {
+        try {
+            const groq = new Groq({ apiKey: getCurrentGroqKey() });
+            const transcription = await groq.audio.transcriptions.create({
+                file: fs.createReadStream(pathToFile),
+                model: "whisper-large-v3",
+                response_format: "verbose_json",
+            });
+            return transcription.text;
+        } catch (error) {
+            console.error(`[Groq Whisper] Transcription Error (Attempt ${attempt}):`, error.message);
+            if (attempt <= 10 && (error.status === 429 || error.message.includes('429'))) {
+                console.log(`[Groq Whisper] Rate Limit. Rotating key...`);
+                getNextGroqKey();
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return transcribeChunk(pathToFile, attempt + 1);
+            }
+            throw error;
+        }
+    };
 
     try {
-        const response = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
-            headers: {
-                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-                ...formData.getHeaders()
-            },
-            maxBodyLength: Infinity // Allow large files
-        });
-        return response.data;
+        const stats = fs.statSync(filePath);
+        if (stats.size > MAX_SIZE_BYTES) {
+            console.log(`File size (${(stats.size / 1024 / 1024).toFixed(2)} MB) exceeds Groq limit. Splitting...`);
+            const chunkDir = path.join(path.dirname(filePath), 'chunks_' + Date.now());
+            if (!fs.existsSync(chunkDir)) fs.mkdirSync(chunkDir);
+
+            // Split into 10MB segments (safer than 25MB)
+            const command = `"${ffmpegPath}" -i "${filePath}" -f segment -segment_time 600 -c copy "${path.join(chunkDir, 'out%03d.m4a')}"`;
+            await execPromise(command);
+
+            const files = fs.readdirSync(chunkDir).sort();
+            let fullTranscript = "";
+            for (const file of files) {
+                const chunkPath = path.join(chunkDir, file);
+                const chunkText = await transcribeChunk(chunkPath);
+                fullTranscript += chunkText + " ";
+                try { fs.unlinkSync(chunkPath); } catch (e) { }
+            }
+            try { fs.rmdirSync(chunkDir); } catch (e) { }
+            return fullTranscript.trim();
+        } else {
+            return await transcribeChunk(filePath);
+        }
     } catch (error) {
-        console.error('Whisper Transcription Error:', error.response?.data || error.message);
+        console.error('Groq Whisper Error:', error.message);
         throw new Error('Failed to transcribe audio.');
     } finally {
-        // Clean up temp file
-        fs.unlink(filePath, (err) => {
-            if (err) console.error('Failed to delete temp file:', err);
-        });
+        if (fs.existsSync(filePath)) {
+            fs.unlink(filePath, (err) => {
+                if (err) console.error('Failed to delete temp file:', err);
+            });
+        }
     }
 }
 
@@ -703,6 +821,60 @@ app.delete('/api/delete-avatar', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/playlist/:id', authenticateToken, async (req, res) => {
+    try {
+        const playlistId = req.params.id;
+        console.log(`[API] Fetching playlist items for ID: ${playlistId}`);
+        const videos = await fetchPlaylistItems(playlistId);
+        console.log(`[API] Successfully found ${videos.length} videos for playlist ${playlistId}`);
+        res.json({ playlistId, videos });
+    } catch (error) {
+        console.error("Playlist Fetch Error:", error.message);
+        res.status(500).json({ error: "Failed to fetch playlist" });
+    }
+});
+
+app.get('/api/download/:videoId', async (req, res) => {
+    try {
+        const videoId = req.params.videoId;
+        if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+            return res.status(400).send('Invalid video ID');
+        }
+
+        const ytDlp = require('yt-dlp-exec');
+        const tempDir = require('os').tmpdir();
+        const outputPath = path.join(tempDir, `vid_${videoId}_${Date.now()}.mp4`);
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+        console.log(`[Download] Starting video download for ${videoId} to ${outputPath}...`);
+
+        // Use yt-dlp to download to a temporary file first
+        await ytDlp(videoUrl, {
+            format: 'best[ext=mp4]/best',
+            output: outputPath,
+            noPlaylist: true,
+        });
+
+        console.log(`[Download] Video downloaded. Sending to user...`);
+
+        res.download(outputPath, `${videoId}.mp4`, (err) => {
+            if (err) {
+                console.error("[Download] Send error:", err);
+            }
+            // Cleanup attached to response finish
+            try {
+                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+            } catch (cleanupErr) {
+                console.warn("Failed to cleanup temp video file:", cleanupErr);
+            }
+        });
+
+    } catch (error) {
+        console.error("Download Endpoint Error:", error);
+        if (!res.headersSent) res.status(500).send("Failed to download video.");
+    }
+});
+
 // Update standard routes to use auth where needed
 app.post('/api/process-video', authenticateToken, async (req, res) => {
     const { videoId, manualTranscript } = req.body;
@@ -720,55 +892,72 @@ app.post('/api/process-video', authenticateToken, async (req, res) => {
     try {
         // 1. Fetch Video Info
         sendStatus("Searching for video metadata...");
-        let youtubeData;
+        let videoInfo = {};
+
         try {
-            youtubeData = await fetchFromYouTube('videos', {
+            // Try valid YouTube API first
+            const youtubeData = await fetchFromYouTube('videos', {
                 part: 'snippet,contentDetails',
                 id: videoId
             });
-        } catch (metadataErr) {
-            console.error("Metadata fetch failed after rotation:", metadataErr.message);
-            res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to fetch video metadata from YouTube' })}\n\n`);
-            return res.end();
+
+            if (youtubeData.items?.length) {
+                const video = youtubeData.items[0];
+                videoInfo = {
+                    id: video.id,
+                    title: video.snippet.title,
+                    thumbnail: video.snippet.thumbnails.high?.url || video.snippet.thumbnails.medium?.url,
+                    hasCaptions: video.contentDetails.caption === 'true'
+                };
+            }
+        } catch (apiErr) {
+            console.warn("YouTube API Metadata fetch failed, trying yt-dlp fallback:", apiErr.message);
         }
 
-        if (!youtubeData.items?.length) {
-            res.write(`data: ${JSON.stringify({ type: 'error', message: 'Video not found' })}\n\n`);
-            return res.end();
+        // Fallback: Use yt-dlp for metadata if API failed
+        if (!videoInfo.id) {
+            try {
+                console.log("Fetching metadata via yt-dlp...");
+                const output = await ytDlp(`https://www.youtube.com/watch?v=${videoId}`, {
+                    dumpSingleJson: true,
+                    noWarnings: true,
+                    noCallHome: true,
+                    preferFreeFormats: true
+                });
+
+                videoInfo = {
+                    id: videoId,
+                    title: output.title,
+                    thumbnail: output.thumbnail,
+                    hasCaptions: true // Assume true or handled by download fallback
+                };
+                console.log("Metadata fetched via yt-dlp.");
+            } catch (dlpErr) {
+                console.error("yt-dlp metadata fetch failed:", dlpErr.message);
+                res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to find video metadata. Please check the URL.' })}\n\n`);
+                return res.end();
+            }
         }
 
-        const video = youtubeData.items[0];
-        const videoInfo = {
-            id: video.id,
-            title: video.snippet.title,
-            thumbnail: video.snippet.thumbnails.high?.url,
-            hasCaptions: video.contentDetails.caption === 'true'
-        };
+        const video = { id: videoId, snippet: { title: videoInfo.title } }; // Compat struct
 
         // 2. Get Transcript
         let transcript = manualTranscript;
         if (!transcript) {
             sendStatus(videoInfo.hasCaptions ? "Retrieving transcript..." : "No captions found. Preparing audio fallback...");
 
+            sendStatus("Extracting audio from video (Force Audio Mode)...");
+
             try {
-                // Try standard transcript first
-                if (videoInfo.hasCaptions) {
-                    try {
-                        const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
-                        transcript = transcriptItems.map(item => item.text).join(' ').replace(/\s+/g, ' ').trim();
-                        if (!transcript) throw new Error("Empty transcript");
-                    } catch (err) {
-                        console.warn("Standard transcript fetch failed, attempting fallback:", err.message);
-                        throw err; // Re-throw to trigger catch(e) block below which handles Whisper fallback
-                    }
-                } else {
-                    throw new Error("No captions");
-                }
-            } catch (e) {
-                sendStatus("Extracting audio from video...");
+                // FORCE AUDIO FALLBACK directly
+                // We skip YoutubeTranscript.fetchTranscript as requested to avoid "Standard transcript fetch failed" delays
                 const audioPath = await downloadAudio(videoId);
-                sendStatus("Transcribing audio with Genius AI...");
+                sendStatus("Transcribing audio with Groq Whisper...");
                 transcript = await transcribeWithWhisper(audioPath);
+            } catch (e) {
+                console.error("Audio transcription failed:", e);
+                res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to generate transcript from audio.' })}\n\n`);
+                return res.end();
             }
         }
 
@@ -786,28 +975,46 @@ app.post('/api/process-video', authenticateToken, async (req, res) => {
             console.warn("Could not fetch AI preferences, using defaults (Check DB migration):", dbErr.message);
         }
 
-        const systemPrompt = `You are an expert educational assistant with a ${prefs.ai_tone} personality. 
-        Your goal is to create ${prefs.ai_detail_level} study notes from the provided video transcript. 
-        Ensure the notes are written in ${prefs.ai_language === 'hi' ? 'Hindi (Devanagari)' : 'English'}.
-        Do NOT summarize too briefly if the user requested detailed notes; preserve all key explanations, examples, and nuances. 
-        Use clear Markdown structure with headings, bullet points, and bold text for emphasis.
+        const systemPrompt = `You are a world-class educational assistant with a ${prefs.ai_tone} personality. 
+        Your mission is to create extremely EXHAUSTIVE, high-quality, and PROPER study notes from the provided video transcript.
         
-        SPECIAL INSTRUCTIONS FOR SONGS/LYRICS:
-        - If the video is a song, provide the lyrics in their ORIGINAL script and a line-by-line translation.
-        - करेक्ट (Correct) any errors in auto-captions before processing.
-        - Ensure language matches user preference (${prefs.ai_language}).`;
+        CRITICAL RULES FOR CONTENT DEPTH:
+        - DO NOT summarize. Instead, provide a COMPREHENSIVE breakdown of every single concept mentioned.
+        - If the transcript is long, the notes MUST be long. Aim for a 1:1 depth ratio.
+        - Include every important detail, technical explanation, specific example, and nuanced point.
+        - Use a logical hierarchy: 
+          # Main Subject
+          ## Big Concept
+          ### Sub-detail
+        - Use Bold text for terminology and Bullet Points for lists.
+        - If there is code, math formulas, or step-by-step instructions, capture them EXACTLY.
+        - Ensure the output is written in ${prefs.ai_language === 'hi' ? 'Hindi (Devanagari)' : 'English'}.
+        
+        SPECIAL INSTRUCTIONS:
+        - If the video is a song, provide full lyrics and a detailed analysis/translation.
+        - Ensure quality matches the user's preference for ${prefs.ai_detail_level} content, but lean towards "Very Detailed" by default.`;
 
-        const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: `Video: ${videoInfo.title}\n\nTranscript: ${transcript.substring(0, 25000)}` }
-            ]
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` }
-        });
+        const result = await generateAI(
+            [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Video: ${videoInfo.title}\n\nTranscript: ${transcript}` }
+            ],
+            { stream: true, max_tokens: 8192, temperature: 0.3 }
+        );
 
-        const notes = groqRes.data.choices[0].message.content;
+        let fullNotes = "";
+
+        // Handle stream
+        for await (const chunk of result) {
+            const content = chunk.choices[0]?.delta?.content || "";
+            if (content) {
+                fullNotes += content;
+                // Send delta to client
+                res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+            }
+        }
+
+        const notes = fullNotes;
 
         // 4. Save to MySQL with user_id
         sendStatus("Finalizing and saving to your library...");
@@ -834,54 +1041,66 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         const [userRows] = await pool.execute('SELECT ai_tone, ai_language FROM users WHERE id = ?', [req.user.id]);
         const prefs = userRows[0] || { ai_tone: 'educational', ai_language: 'en' };
 
-        const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-                {
-                    role: 'system',
-                    content: `You are a helpful AI tutor assistant with a ${prefs.ai_tone} personality. 
+        const systemPrompt = `You are a helpful AI tutor assistant with a ${prefs.ai_tone} personality. 
                     The user is asking questions about a video titled "${videoTitle}". 
                     Respond in ${prefs.ai_language === 'hi' ? 'Hindi (Devanagari)' : 'English'}.
                     You have access to the DETAILED NOTES from this video below. 
                     Use these notes to answer the user's questions accurately and explain concepts in depth.
-                    If the answer isn't in the notes, use your general knowledge but mention that it wasn't explicitly in the video notes.
-                    
-                    NOTES CONTEXT:
-                    ${context}`
-                },
-                ...messages.map(m => ({ role: m.role, content: m.content }))
-            ]
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` }
-        });
+                    If the answer isn't in the notes, use your general knowledge but mention that it wasn't explicitly in the video notes.`;
 
-        res.json({ reply: groqRes.data.choices[0].message.content });
+        const chatHistory = messages.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n');
+        const prompt = `${systemPrompt}\n\nNOTES CONTEXT:\n${context}\n\nCHAT HISTORY:\n${chatHistory}\n\nAI Answer:`;
+
+        // Enable streaming in Groq call
+        const result = await generateAI(
+            [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `NOTES CONTEXT:\n${context}\n\nCHAT HISTORY:\n${chatHistory}\n\nAI Answer:` }
+            ],
+            { model: "llama-3.3-70b-versatile", stream: true }
+        );
+
+        // Set headers for text stream
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Transfer-Encoding', 'chunked');
+
+        try {
+            for await (const chunk of result) {
+                const text = chunk.choices[0]?.delta?.content || "";
+                if (text) {
+                    res.write(text);
+                }
+            }
+            res.end();
+        } catch (streamErr) {
+            console.error("Streaming error:", streamErr);
+            res.end(); // Close stream on error
+        }
+
     } catch (error) {
         console.error("Chat API Error:", error);
-        res.status(500).json({ error: "Failed to generate chat response" });
+        // Only send error status if headers haven't been sent yet
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Failed to generate chat response" });
+        } else {
+            res.end();
+        }
     }
 });
 
 app.post('/api/recommendations', async (req, res) => {
     const { videoTitle, notes } = req.body;
     try {
-        const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.1-8b-instant',
-            messages: [
-                {
-                    role: 'system',
-                    content: 'You are an intelligent content recommender. Your goal is to suggest 10 relevant, high-quality YouTube search queries or video topics based on the provided video notes. \nFirst, determine the PRIMARY CATEGORY of the content (e.g., Education, Music, Sports, Gaming, Entertainment).\n- If Education/Tech: Suggest advanced study topics, specific technical deep-dives, or related concepts.\n- If Music: Suggest similar artists, genre history, live performances, or music theory.\n- If Sports: Suggest match analysis, player highlights, historical moments, or training guides.\n- If Gaming: Suggest lore videos, pro-level analysis, speedruns, or similar games.\n- If Entertainment/Vlog: Suggest similar creators, related trends, or behind-the-scenes content.\n\nOutput Requirement: Return ONLY a flat JSON array of 10 distinct strings. Example: ["topic 1", "topic 2"]. Do not return objects.'
-                },
-                {
-                    role: 'user',
-                    content: `Video Title: ${videoTitle}\n\nDetailed Notes Context: ${notes ? notes.substring(0, 15000) : ''}`
-                }
-            ]
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` }
-        });
+        const systemPrompt = 'You are an intelligent content recommender. Your goal is to suggest 10 relevant, high-quality YouTube search queries or video topics based on the provided video notes. \nFirst, determine the PRIMARY CATEGORY of the content (e.g., Education, Music, Sports, Gaming, Entertainment).\n- If Education/Tech: Suggest advanced study topics, specific technical deep-dives, or related concepts.\n- If Music: Suggest similar artists, genre history, live performances, or music theory.\n- If Sports: Suggest match analysis, player highlights, historical moments, or training guides.\n- If Gaming: Suggest lore videos, pro-level analysis, speedruns, or similar games.\n- If Entertainment/Vlog: Suggest similar creators, related trends, or behind-the-scenes content.\n\nOutput Requirement: Return ONLY a flat JSON array of 10 distinct strings. Example: ["topic 1", "topic 2"]. Do not return objects.';
 
-        let content = groqRes.data.choices[0].message.content;
+        const result = await generateAI(
+            [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Video Title: ${videoTitle}\n\nDetailed Notes Context: ${notes}` }
+            ],
+            { json: true }
+        );
+        let content = result.choices[0].message.content;
         // Robust JSON extraction
         const jsonStart = content.indexOf('[');
         const jsonEnd = content.lastIndexOf(']');
@@ -941,7 +1160,10 @@ app.post('/api/recommendations', async (req, res) => {
                 }
                 return { query: topic };
             } catch (searchErr) {
-                console.error(`YouTube Search rotation failed for topic "${topic}":`, searchErr.message);
+                // If 403, it means API is disabled. Don't spam console.
+                if (searchErr.response?.status !== 403) {
+                    console.warn(`YouTube Search failed for topic "${topic}":`, searchErr.message);
+                }
                 return { query: topic };
             }
         }));
@@ -983,23 +1205,16 @@ app.post('/api/recommendations', async (req, res) => {
 app.post('/api/generate-flashcards', authenticateToken, async (req, res) => {
     const { notes, videoTitle } = req.body;
     try {
-        const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-                {
-                    role: 'system',
-                    content: 'You are an educational tools creator. Create a set of 8-10 high-quality flashcards from the provided video notes. Each flashcard must have a "front" (question/concept) and a "back" (answer/explanation). Return ONLY a JSON array of objects with "front" and "back" keys. No other text.'
-                },
-                {
-                    role: 'user',
-                    content: `Video Title: ${videoTitle}\n\nNotes:\n${notes.substring(0, 15000)}`
-                }
-            ]
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` }
-        });
+        const systemPrompt = 'You are an educational tools creator. Create a set of 8-10 high-quality flashcards from the provided video notes. Each flashcard must have a "front" (question/concept) and a "back" (answer/explanation). Return ONLY a JSON array of objects with "front" and "back" keys. No other text.';
 
-        let content = groqRes.data.choices[0].message.content;
+        const result = await generateAI(
+            [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Video Title: ${videoTitle}\n\nNotes:\n${notes}` }
+            ],
+            { json: true }
+        );
+        let content = result.choices[0].message.content;
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
         const flashcards = JSON.parse(content);
         res.json({ flashcards });
@@ -1019,27 +1234,20 @@ app.post('/api/generate-quiz', authenticateToken, async (req, res) => {
             [userId, videoId]
         );
 
-        const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-                {
-                    role: 'system',
-                    content: `You are an educational tools creator. Create a 5-question multiple choice quiz from the provided video notes. 
+        const systemPrompt = `You are an educational tools creator. Create a 5-question multiple choice quiz from the provided video notes. 
                     PERSONALIZATION RULES:
                     ${mistakes.length > 0 ? `- The user previously struggled with these areas: ${mistakes.map(m => m.question).join(', ')}. Include at least one question that reinforces these concepts.` : ''}
                     - Each question must have a "question", 4 "options", and a "correctAnswer" index (0-3). 
-                    - Return ONLY a JSON array of objects with these keys. No other text.`
-                },
-                {
-                    role: 'user',
-                    content: `Video Title: ${videoTitle}\n\nNotes:\n${notes.substring(0, 15000)}`
-                }
-            ]
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` }
-        });
+                    - Return ONLY a JSON array of objects with these keys. No other text.`;
 
-        let content = groqRes.data.choices[0].message.content;
+        const result = await generateAI(
+            [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Video Title: ${videoTitle}\n\nNotes:\n${notes}` }
+            ],
+            { json: true }
+        );
+        let content = result.choices[0].message.content;
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
         const quiz = JSON.parse(content);
         res.json({ quiz });
@@ -1073,25 +1281,21 @@ app.post('/api/synthesize-notes', authenticateToken, async (req, res) => {
         const combinedContext = rows.map((r, i) => `VIDEO ${i + 1}: ${r.title}\nNOTES ${i + 1}:\n${r.notes}`).join('\n\n---\n\n');
 
         // 3. Generate Master Guide via Groq
-        const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.3-70b-versatile', // Upgraded to 70b for better synthesis and larger context
-            messages: [
-                {
-                    role: 'system',
-                    content: `You are an expert educational synthesizer. Create a comprehensive, seamless "Master Guide" by combining the provided notes.
+        const systemPrompt = `You are an expert educational synthesizer. Create a comprehensive, seamless "Master Guide" by combining the provided notes.
                     - CRITICAL: Do NOT skip any key details. Cover ALL topics found in the notes.
                     - Resolve overlaps and remove introductory filler only.
                     - Organize into a logical high-level structure with Sections and Sub-sections.
                     - Usage of Markdown: Use clear headers (#, ##, ###), bold key terms, and bullet points for readability.
-                    - Output should feel like a complete textbook chapter.`
-                },
-                { role: 'user', content: `SYNTHESIZE THESE NOTES (truncated at 30k chars if needed):\n\n${combinedContext.substring(0, 30000)}` }
-            ]
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` }
-        });
+                    - Output should feel like a complete textbook chapter.`;
 
-        const masterGuide = groqRes.data.choices[0].message.content;
+        const result = await generateAI(
+            [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `SYNTHESIZE THESE NOTES:\n\n${combinedContext}` }
+            ],
+            { max_tokens: 8192, temperature: 0.3 }
+        );
+        const masterGuide = result.choices[0].message.content;
         res.json({ masterGuide });
     } catch (error) {
         console.error("Synthesis Error:", error);

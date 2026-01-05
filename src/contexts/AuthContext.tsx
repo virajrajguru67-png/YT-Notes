@@ -14,7 +14,8 @@ interface User {
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    login: (token: string, user: User) => void;
+    login: (email: string, password: string) => Promise<void>;
+    register: (username: string, email: string, password: string) => Promise<void>;
     logout: () => void;
     updateUser: (user: User) => void;
     isAuthenticated: boolean;
@@ -39,11 +40,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
     }, []);
 
-    const login = (newToken: string, newUser: User) => {
-        setToken(newToken);
-        setUser(newUser);
-        localStorage.setItem("auth_token", newToken);
-        localStorage.setItem("auth_user", JSON.stringify(newUser));
+    const login = async (email: string, password: string) => {
+        const response = await fetch('http://127.0.0.1:3001/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            setToken(data.token);
+            setUser(data.user);
+            localStorage.setItem("auth_token", data.token);
+            localStorage.setItem("auth_user", JSON.stringify(data.user));
+        } else {
+            throw new Error(data.error || "Login failed");
+        }
+    };
+
+    const register = async (username: string, email: string, password: string) => {
+        const response = await fetch('http://127.0.0.1:3001/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Registration failed");
+        }
     };
 
     const logout = () => {
@@ -64,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 user,
                 token,
                 login,
+                register,
                 logout,
                 updateUser,
                 isAuthenticated: !!token,
