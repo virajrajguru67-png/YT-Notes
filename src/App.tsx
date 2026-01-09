@@ -12,6 +12,7 @@ import Library from "./pages/Library";
 import CollectionPage from "./pages/CollectionPage";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
+import PlaylistView from "./pages/PlaylistView";
 
 const queryClient = new QueryClient();
 
@@ -84,6 +85,22 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <CollectionPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/playlist"
+                element={
+                  <ProtectedRoute>
+                    <PlaylistView />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/playlist/:id"
+                element={
+                  <ProtectedRoute>
+                    <PlaylistView />
                   </ProtectedRoute>
                 }
               />

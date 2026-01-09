@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { FileText, Sparkles, Youtube, ExternalLink, PlayCircle, Loader2, Clock, RefreshCw, Download } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
@@ -28,6 +28,7 @@ const Index = () => {
   const [historyTrigger, setHistoryTrigger] = useState(0);
   const { token } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     isLoadingVideo,
     isLoadingNotes,
@@ -92,8 +93,16 @@ const Index = () => {
       handleHistorySelect(location.state.selectedNote);
       // Clean up state to prevent re-triggering on refresh
       window.history.replaceState({}, document.title);
+    } else if (location.state?.autoPlayVideoId) {
+      const vidId = location.state.autoPlayVideoId;
+      processVideo(`https://www.youtube.com/watch?v=${vidId}`);
+      if (location.state.playlistVideos) {
+        setRecommendations(location.state.playlistVideos);
+        setIsPlaylistMode(true);
+      }
+      window.history.replaceState({}, document.title);
     }
-  }, [location.state, handleHistorySelect]);
+  }, [location.state, handleHistorySelect, processVideo]);
 
   const { toast } = useToast();
 
@@ -141,6 +150,15 @@ const Index = () => {
   const handleSubmit = async (url: string, manualTranscript?: string) => {
     console.log("handleSubmit called with:", url);
     const playlistId = extractPlaylistId(url);
+    const hasSpecificVideo = url.includes("watch?v=");
+
+    /*
+    if (playlistId && !hasSpecificVideo) {
+      navigate(`/playlist/${playlistId}`);
+      return;
+    }
+    */
+
     if (playlistId) {
       console.log("Detected playlist ID:", playlistId);
       // It's a playlist!
@@ -155,16 +173,15 @@ const Index = () => {
 
       // If it also has a video ID (e.g. watch?v=...&list=...), process the video too
       // If it's just a playlist URL (playlist?list=...), auto-play the first video
-      const hasSpecificVideo = url.includes("watch?v=");
 
       if (hasSpecificVideo) {
         await processVideo(url, manualTranscript);
         setHistoryTrigger(prev => prev + 1);
       } else {
-        toast({ title: "Playlist Ready", description: "Select a video from the sidebar to start learning!" });
+        // Just playlist loaded (handled above or should have navigated)
       }
     } else {
-      // Regular video
+      // Normal video or search
       await processVideo(url, manualTranscript);
       setHistoryTrigger(prev => prev + 1);
     }

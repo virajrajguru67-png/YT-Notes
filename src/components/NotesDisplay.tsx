@@ -8,16 +8,18 @@ import { InteractiveStudy } from "./InteractiveStudy";
 import { FocusMode } from "./FocusMode";
 import { GraduationCap, Share2, Eye } from "lucide-react";
 
-interface NotesDisplayProps {
+export interface NotesDisplayProps {
     notes: string;
     isLoading: boolean;
     videoTitle?: string;
     videoId?: string;
     currentStep?: string;
     onNextVideo?: () => void;
+    onPrevVideo?: () => void;
+    onBackToPlaylist?: () => void;
 }
 
-export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentStep, onNextVideo }: NotesDisplayProps) {
+export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentStep, onNextVideo, onPrevVideo, onBackToPlaylist }: NotesDisplayProps) {
     const { toast } = useToast();
     const [currentPage, setCurrentPage] = useState(1);
     const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'study'>('notes');
@@ -279,6 +281,28 @@ export function NotesDisplay({ notes, isLoading, videoTitle, videoId, currentSte
                     >
                         <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
                     </Button>
+
+                    {onBackToPlaylist && (
+                        <Button
+                            variant="ghost"
+                            onClick={onBackToPlaylist}
+                            className="hidden sm:inline-flex h-8 w-auto px-4 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 font-bold text-xs uppercase tracking-wide gap-2 transition-all mr-2"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                            <span>List</span>
+                        </Button>
+                    )}
+
+                    {onPrevVideo && (
+                        <Button
+                            variant="ghost"
+                            onClick={onPrevVideo}
+                            className="hidden sm:inline-flex h-8 w-auto px-4 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 font-bold text-xs uppercase tracking-wide gap-2 transition-all mr-2"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                            <span>Prev</span>
+                        </Button>
+                    )}
 
                     {onNextVideo && (
                         <Button

@@ -43,6 +43,16 @@ export function InteractiveStudy({ notes, videoTitle, videoId }: InteractiveStud
     // View State
     const [activeTab, setActiveTab] = useState<'flashcards' | 'quiz'>('flashcards');
 
+    // Shuffle function to randomize array order
+    const shuffleArray = <T,>(array: T[]): T[] => {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    };
+
     const generateFlashcards = async () => {
         setIsFlashcardLoading(true);
         try {
@@ -55,7 +65,10 @@ export function InteractiveStudy({ notes, videoTitle, videoId }: InteractiveStud
                 body: JSON.stringify({ notes, videoTitle }),
             });
             const data = await res.json();
-            if (data.flashcards) setFlashcards(data.flashcards);
+            if (data.flashcards) {
+                // Shuffle flashcards to randomize order
+                setFlashcards(shuffleArray(data.flashcards));
+            }
         } catch (err) {
             toast.error("Failed to generate flashcards");
         } finally {
@@ -75,7 +88,10 @@ export function InteractiveStudy({ notes, videoTitle, videoId }: InteractiveStud
                 body: JSON.stringify({ notes, videoTitle, videoId }),
             });
             const data = await res.json();
-            if (data.quiz) setQuiz(data.quiz);
+            if (data.quiz) {
+                // Shuffle quiz questions to randomize order
+                setQuiz(shuffleArray(data.quiz));
+            }
         } catch (err) {
             toast.error("Failed to generate quiz");
         } finally {

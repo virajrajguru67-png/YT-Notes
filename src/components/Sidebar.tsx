@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { History, Home, Menu, Settings as SettingsIcon, Video, LogOut, Youtube, Sparkles, Trash2, MoreVertical, Library as LibraryIcon, Shield } from "lucide-react";
+import { History, Home, Menu, Settings as SettingsIcon, Video, LogOut, Youtube, Sparkles, Trash2, MoreVertical, Library as LibraryIcon, Shield, ListVideo } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useNotesHistory } from "@/hooks/useNotesHistory";
@@ -103,6 +103,17 @@ export function Sidebar({ className, onHistorySelect, refreshTrigger, onNewNote 
                             <Link to="/library">
                                 <LibraryIcon className="h-4 w-4" />
                                 <span className="font-bold text-xs">Knowledge Maps</span>
+                            </Link>
+                        </Button>
+                        <Button
+                            variant={location.pathname.startsWith("/playlist") ? "secondary" : "ghost"}
+                            className={`w-full justify-start gap-3 h-10 px-4 rounded-xl transition-all duration-300 ${location.pathname.startsWith("/playlist") ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500'}`}
+                            asChild
+                            onClick={() => setOpen(false)}
+                        >
+                            <Link to="/playlist">
+                                <ListVideo className="h-4 w-4" />
+                                <span className="font-bold text-xs">Playlist Manager</span>
                             </Link>
                         </Button>
                         {isAdmin && (
@@ -291,7 +302,30 @@ export function Sidebar({ className, onHistorySelect, refreshTrigger, onNewNote 
                     </div>
                 </div>
             </div>
-        </div >
+
+            {/* Create Collection Dialog */}
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Create New Collection</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateCourse} className="space-y-4">
+                        <Input
+                            placeholder="Collection name..."
+                            value={newCourseName}
+                            onChange={(e) => setNewCourseName(e.target.value)}
+                            autoFocus
+                        />
+                        <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit">Create</Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </div>
     );
 
     return (

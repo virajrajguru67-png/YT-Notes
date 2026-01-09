@@ -411,7 +411,8 @@ async function transcribeWithWhisper(filePath) {
             if (!fs.existsSync(chunkDir)) fs.mkdirSync(chunkDir);
 
             // Split into 10MB segments (safer than 25MB)
-            const command = `"${ffmpegPath}" -i "${filePath}" -f segment -segment_time 600 -c copy "${path.join(chunkDir, 'out%03d.m4a')}"`;
+            const ext = path.extname(filePath) || '.m4a';
+            const command = `"${ffmpegPath}" -i "${filePath}" -f segment -segment_time 600 -c copy "${path.join(chunkDir, `out%03d${ext}`)}"`;
             await execPromise(command);
 
             const files = fs.readdirSync(chunkDir).sort();
@@ -821,16 +822,127 @@ app.delete('/api/delete-avatar', authenticateToken, async (req, res) => {
     }
 });
 
+// Helper: Fetch Playlist with yt-dlp (Fallback)
+async function fetchPlaylistWithYtDlp(playlistId) {
+    const ytDlp = require('yt-dlp-exec');
+    try {
+        console.log(`[Playlist] Falling back to yt-dlp for ${playlistId}`);
+        const output = await ytDlp(`https://www.youtube.com/playlist?list=${playlistId}`, {
+            flatPlaylist: true,
+            dumpSingleJson: true,
+            noWarnings: true,
+            noCallHome: true,
+        });
+
+        if (!output || !output.entries) return [];
+
+        return output.entries.map(entry => ({
+            videoId: entry.id,
+            title: entry.title,
+            thumbnail: (entry.thumbnails && entry.thumbnails.length) ? entry.thumbnails[entry.thumbnails.length - 1].url : `https://i.ytimg.com/vi/${entry.id}/hqdefault.jpg`,
+            channel: entry.uploader || entry.channel || "Unknown",
+            publishedAt: null
+        }));
+    } catch (e) {
+        console.error("yt-dlp playlist fetch failed:", e.message);
+        throw e;
+    }
+}
+
 app.get('/api/playlist/:id', authenticateToken, async (req, res) => {
     try {
         const playlistId = req.params.id;
         console.log(`[API] Fetching playlist items for ID: ${playlistId}`);
-        const videos = await fetchPlaylistItems(playlistId);
+
+        let videos;
+        try {
+            videos = await fetchPlaylistItems(playlistId);
+        } catch (apiError) {
+            console.warn(`[API] YouTube API failed for playlist ${playlistId}, trying fallback...`, apiError.message);
+            videos = await fetchPlaylistWithYtDlp(playlistId);
+        }
+
         console.log(`[API] Successfully found ${videos.length} videos for playlist ${playlistId}`);
         res.json({ playlistId, videos });
     } catch (error) {
         console.error("Playlist Fetch Error:", error.message);
         res.status(500).json({ error: "Failed to fetch playlist" });
+    }
+});
+
+app.get('/api/prepare-download/:videoId', async (req, res) => {
+    try {
+        const videoId = req.params.videoId;
+        if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+            return res.status(400).json({ error: 'Invalid video ID' });
+        }
+
+        const ytDlp = require('yt-dlp-exec');
+        const tempDir = require('os').tmpdir();
+        const quality = req.query.quality || 'best';
+        let formatString = 'best[ext=mp4]/best';
+        let ext = 'mp4';
+
+        if (quality === 'audio') {
+            formatString = 'bestaudio[ext=m4a]/bestaudio';
+            ext = 'm4a';
+        } else if (quality === '1080') {
+            formatString = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
+        } else if (quality === '720') {
+            formatString = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
+        } else if (quality === '480') {
+            formatString = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]';
+        }
+
+        const filename = `vid_${videoId}_${Date.now()}.${ext}`;
+        const outputPath = path.join(tempDir, filename);
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+        console.log(`[Prepare] Starting video processing for ${videoId} (Quality: ${quality})...`);
+
+        await ytDlp(videoUrl, {
+            format: formatString,
+            output: outputPath,
+            noPlaylist: true,
+            ffmpegLocation: ffmpegPath,
+            mergeOutputFormat: ext === 'mp4' ? 'mp4' : undefined,
+        });
+
+        console.log(`[Prepare] Video ready: ${filename}`);
+        res.json({ status: 'ready', filename, ext });
+
+    } catch (error) {
+        console.error("Prepare Download Error:", error);
+        res.status(500).json({ error: "Failed to process video: " + error.message });
+    }
+});
+
+app.get('/api/serve-download/:filename', async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        // Security check: simple basename only
+        if (!/^[a-zA-Z0-9_.-]+$/.test(filename) || filename.includes('..') || filename.includes('/')) {
+            return res.status(400).send("Invalid filename");
+        }
+
+        const tempDir = require('os').tmpdir();
+        const filePath = path.join(tempDir, filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).send("File expired or not found");
+        }
+
+        const sanitize = (str) => str.replace(/[^a-z0-9\u00a0-\uffff _-]/gi, '_').trim();
+        const userTitle = req.query.title ? sanitize(req.query.title) : 'video';
+        const ext = path.extname(filename);
+
+        res.download(filePath, `${userTitle}${ext}`, (err) => {
+            if (err) console.error("Send error:", err);
+            try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) { }
+        });
+    } catch (e) {
+        console.error("Serve Error:", e);
+        res.status(500).send("Serve Error");
     }
 });
 
@@ -843,21 +955,48 @@ app.get('/api/download/:videoId', async (req, res) => {
 
         const ytDlp = require('yt-dlp-exec');
         const tempDir = require('os').tmpdir();
-        const outputPath = path.join(tempDir, `vid_${videoId}_${Date.now()}.mp4`);
+        const quality = req.query.quality || 'best';
+        let formatString = 'best[ext=mp4]/best';
+        let ext = 'mp4';
+
+        if (quality === 'audio') {
+            formatString = 'bestaudio[ext=m4a]/bestaudio';
+            ext = 'm4a';
+        } else if (quality === '1080') {
+            formatString = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
+        } else if (quality === '720') {
+            formatString = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
+        } else if (quality === '480') {
+            formatString = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]';
+        }
+
+        const outputPath = path.join(tempDir, `vid_${videoId}_${Date.now()}.${ext}`);
         const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-        console.log(`[Download] Starting video download for ${videoId} to ${outputPath}...`);
+        console.log(`[Download] Starting video download for ${videoId} (Quality: ${quality}) to ${outputPath}...`);
 
         // Use yt-dlp to download to a temporary file first
         await ytDlp(videoUrl, {
-            format: 'best[ext=mp4]/best',
+            format: formatString,
             output: outputPath,
             noPlaylist: true,
+            ffmpegLocation: ffmpegPath, // Ensure ffmpeg is found for merging
+            // Ensure we merge if needed
+            mergeOutputFormat: ext === 'mp4' ? 'mp4' : undefined,
         });
 
+        // ... existing download logic ...
         console.log(`[Download] Video downloaded. Sending to user...`);
 
-        res.download(outputPath, `${videoId}.mp4`, (err) => {
+        const sanitize = (str) => str.replace(/[^a-z0-9\u00a0-\uffff _-]/gi, '_').trim();
+        const userFilename = req.query.title ? sanitize(req.query.title) : videoId;
+
+        // signal client that download started
+        if (req.query.token) {
+            res.cookie('downloadStatus', req.query.token, { maxAge: 60000, path: '/' });
+        }
+
+        res.download(outputPath, `${userFilename}.${ext}`, (err) => {
             if (err) {
                 console.error("[Download] Send error:", err);
             }
@@ -868,6 +1007,7 @@ app.get('/api/download/:videoId', async (req, res) => {
                 console.warn("Failed to cleanup temp video file:", cleanupErr);
             }
         });
+
 
     } catch (error) {
         console.error("Download Endpoint Error:", error);
